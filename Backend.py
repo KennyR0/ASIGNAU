@@ -1,44 +1,52 @@
 import pandas as pd
+from abc import abstractmethod,ABC
 
 #ASIGNAU (ASIGNACIÓN UNIVERSITARIA)
 
 "Clase Padre"
-class Invitado:
+class Usuario(ABC):
 
-    def iniciar_sesion(self,intento_cedu:str,intento_contra):
-        print(f"Paso la cedula: {intento_cedu} y la contraseña: {intento_contra}")
-        base_dato = self.cargar_base()
-        usuario = base_dato[base_dato['Identificación']== intento_cedu]
 
-        if usuario.iloc[0]['Contraseña'] == intento_contra:
+    @abstractmethod
+    def iniciar_sesion(self):
+        pass
+
+    @abstractmethod
+    def cargar_base(self):
+        pass
+
+
+"Clase Hija"
+class Administrador(Usuario):
+
+    #Atributo de clase
+    Periodo  = "2025 - 2"
+    #Atributos de instancia
+    def __init__(self):
+        self.admin = {
+
+        }
+    
+    #Metodos
+    def iniciar_sesion(self,intento_correo:str,intento_contra:str):
+        print(f"Paso la cedula: {intento_correo} y la contraseña: {intento_contra}")
+        admin = self.cargar_base()
+        # Verificar contraseña
+        if admin[0] == (intento_correo) and admin[1] == intento_contra:
+            print("Login exitoso")
             return True
-        return False
         
-
+        print("Contraseña incorrecta")
+        return False
+    
     def visualizar_ventana(self):
         #Aqui visualizaria la ventana de login
         pass
     
     def cargar_base(self):
-        base = pd.read_excel("EJEMPLO_MATRIZ_ASIGNACIÓN_2025-2.xlsx",sheet_name=1)
-        return base
-
-"Clase Hija"
-class Administrador(Invitado):
-
-    #Atributo de clase
-    Periodo  = "2025 - 2"
-    #Atributos de instancia
-    def __init__(self,nombre,cedula,correo,contraseña):
-        print(f"Administrador: {nombre}, con correo: {correo} y cédula:{cedula} creado")
-
-        self.nombre = nombre
-        self.cedula = cedula
-        self.correo = correo
-        self.contraseña = contraseña
-        self.estado = True
-    
-    #Metodos
+        credenciales = ["prueba1@uleam.edu.ec","ADMIN123"]
+        return credenciales
+        
     def subir_malla(self):
         return print("Se ha subido nueva malla curricular")
 
@@ -49,18 +57,42 @@ class Administrador(Invitado):
         return self.estado
         
 "Clase Hija"
-class Postulante(Invitado):
+class Postulante(Usuario):
     
     #Atributos de Instancia 
-    def __init__(self,nombre):
+    def __init__(self):
         self.postulante = {
-            'Nombre' : nombre
+            
         }
 
     #Metodos
     def ver_puntaje(self):
         return self.puntaje
 
+    def iniciar_sesion(self,intento_cedu:str,intento_contra:str):
+        print(f"Paso la cedula: {intento_cedu} y la contraseña: {intento_contra}")
+        base_dato = self.cargar_base()
+        usuario = base_dato[base_dato['IDENTIFICACION'] == intento_cedu]
+        #tengo miedo che
+        # Verificar contraseña
+        if str(usuario.iloc[7]['CONTRASEÑA']) == (intento_contra):
+            print("Login exitoso")
+            return True
+        
+        print("Contraseña incorrecta")
+        return False
+    
+    def cargar_base(self):
+        import os
+        excel = "ASIGNAU/Base_de_dato/1._diccionario_datos_insc_eval_post.xlsx" #Nombre de nuestro archivo excel
+        if os.path.exists(excel): #Comprueba la ruta con os, buscando la existencia de nuestro archivo
+            """
+            Sheet_name= es la hoja del excel que estamos leyendo, comenzando de 0, en este caso se usa la 6
+            Skiprows = se salta rows/filas del excel
+            """
+            base = pd.read_excel(excel,sheet_name=5,skiprows=1)  #lee el excel usando panda
+            return base
+        
     def cambiar_contraseña(self,nueva_contraseña):
         self.contraseña = nueva_contraseña
         return (f"Contraseña cambiada ")
@@ -129,5 +161,4 @@ class Reporte:
             'IES_ID' : id
         }
     
-Intento = Invitado()
-print(Intento.iniciar_sesion("1350432058","PEpe1315"))
+
