@@ -1,8 +1,11 @@
 import tkinter as tk
 from tkinter import messagebox
+from Backend import Administrador,Postulante
+
 
 class Login:
-    def __init__(self, ventana_loging):
+    def __init__(self, ventana_loging,usuario):
+        self.usuario = usuario
         self.ventana_loging = ventana_loging
         ventana_loging.title("Login")
 
@@ -21,6 +24,24 @@ class Login:
         self.login_button = tk.Button(ventana_loging, text="Iniciar Sesión", command=self.validar_login)
         self.login_button.pack()
 
+    def validar_login(self):
+        cedula = self.entry_cedula.get()
+        contraseña = self.entry_contraseña.get()
+        
+        # Validar que los campos no estén vacíos
+        if not cedula or not contraseña:
+            messagebox.showerror("Error", "Por favor complete todos los campos")
+            return
+            
+        try:
+            if self.usuario.iniciar_sesion(cedula, contraseña):
+                messagebox.showinfo("Éxito", "Inicio de sesión exitoso") #Muestra  una ventana emergente
+                self.ventana_loging.destroy()  # Cerrar ventana de login
+                # Aquí se abriria la ventana de posutlante o del admin
+            else:
+                messagebox.showerror("Error", "Cédula o contraseña incorrecta")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al iniciar sesión: {str(e)}")
 
 class Ventana_principal():
     def __init__(self, principal):
@@ -44,13 +65,15 @@ class Ventana_principal():
 
         frame_botones = tk.Frame(frame_principal, bg="white")
         frame_botones.pack(expand=True)
+
+        
         
         btn_postulante = tk.Button(
             frame_botones,
             text="Iniciar sesión\ncomo postulante",
             font=("Arial", 12),
-            bg="#69f870",
-            fg="white",
+            bg="#00af09",
+            fg="black",
             width=20,
             height=4,
             cursor="hand2",
@@ -64,8 +87,8 @@ class Ventana_principal():
             frame_botones,
             text="Iniciar sesión\ncomo administrador",
             font=("Arial", 12),
-            bg="#e74c3c",
-            fg="white",
+            bg="#5f16cc",
+            fg="black",
             width=20,
             height=4,
             cursor="hand2",
@@ -74,7 +97,22 @@ class Ventana_principal():
             command=self.login_admin
         )
         btn_admin.pack(side=tk.LEFT, padx=20)
-    
+
+        btn_salir = tk.Button(
+            frame_botones,
+            text="Salir",
+            font=("Arial", 12),
+            bg="#f4480a",
+            fg="black",
+            width=20,
+            height=4,
+            cursor="hand2",
+            relief=tk.RAISED,
+            bd=3,
+            command=self.salir
+        )
+        btn_salir.pack(side=tk.LEFT, padx=20)
+
     def centrar_ventana(self):
         self.principal.update_idletasks()
         ancho = self.principal.winfo_width()
@@ -84,32 +122,16 @@ class Ventana_principal():
         self.principal.geometry(f'{ancho}x{alto}+{x}+{y}')
     
     def login_postulante(self):
+        postulante = Postulante()
         self.principal.withdraw()
         ventana_login = tk.Toplevel(self.principal)
-
-        app = Login(ventana_login)
+        app = Login(ventana_login,postulante)
 
     def login_admin(self):
+        admin = Administrador()
         self.principal.withdraw()
         ventana_login = tk.Toplevel(self.principal)
-
-        app = Login(ventana_login)
-        
-    def validar_login(self):
-        cedula = self.entry_cedula.get()
-        contraseña = self.entry_contraseña.get()
-
-        # Validar que los campos no estén vacíos
-        if not cedula or not contraseña:
-            messagebox.showerror("Error", "Por favor complete todos los campos")
-            return
-            
-        try:
-            if self.usuario.iniciar_sesion(cedula, contraseña):
-                messagebox.showinfo("Éxito", "Inicio de sesión exitoso") #Muestra  una ventana emergente
-                self.ventana_loging.destroy()  # Cerrar ventana de login
-                # Aquí se abriria la ventana de posutlante o del admin
-            else:
-                messagebox.showerror("Error", "Cédula o contraseña incorrecta")
-        except Exception as e:
-            messagebox.showerror("Error", f"Error al iniciar sesión: {str(e)}")
+        app = Login(ventana_login,admin)
+    
+    def salir(self):
+        self.principal.destroy()
