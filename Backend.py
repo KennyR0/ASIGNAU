@@ -1,8 +1,39 @@
 import pandas as pd
 from abc import abstractmethod,ABC
-
+import os
 #ASIGNAU (ASIGNACIÓN UNIVERSITARIA)
 
+#Iyección de
+class Base_Dato(ABC):
+    
+    @abstractmethod
+    def cargar_base(self):
+        pass
+
+class BD_ADMIN(Base_Dato):
+    def cargar_base(self):
+        credenciales = ["prueba1@uleam.edu.ec","ADMIN123"]
+        return credenciales
+
+class BD_USUARIO(Base_Dato):
+    def cargar_base(self):
+        excel = "Postulantes.xlsx" #Nombre de nuestro archivo excel
+        if os.path.exists(excel): #Comprueba la ruta con os, buscando la existencia de nuestro archivo
+            """
+            Sheet_name= es la hoja del excel que estamos leyendo, 
+            comenzando de 0, en este caso se usa la 6
+            Skiprows = se salta rows/filas del excel
+            """
+            base = pd.read_excel(excel,sheet_name=5,skiprows=1)  #lee el excel usando panda
+            return base
+
+class IniciarSesion:
+    
+    def self(self,intento_correo:str,intento_contra:str,bd:Base_Dato):
+        
+
+#Primero Invitado -> Login A/P -> LOGICA [ce][contra] -> Instancia A/P
+"""
 "Clase Padre"
 class Usuario(ABC):
 
@@ -22,9 +53,9 @@ class Administrador(Usuario):
     #Atributo de clase
     Periodo  = "2025 - 2"
     #Atributos de instancia
-    def __init__(self):
+    def __init__(self, usuario):
         self.admin = {
-
+        #CARGARIA EL USUARIO LOGIADO
         }
     
     #Metodos
@@ -87,9 +118,9 @@ class Postulante(Usuario):
         excel = "ASIGNAU/Base_de_dato/1._diccionario_datos_insc_eval_post.xlsx" #Nombre de nuestro archivo excel
         if os.path.exists(excel): #Comprueba la ruta con os, buscando la existencia de nuestro archivo
             """
-            Sheet_name= es la hoja del excel que estamos leyendo, comenzando de 0, en este caso se usa la 6
-            Skiprows = se salta rows/filas del excel
-            """
+            #Sheet_name= es la hoja del excel que estamos leyendo, comenzando de 0, en este caso se usa la 6
+           #Skiprows = se salta rows/filas del excel
+        """
             base = pd.read_excel(excel,sheet_name=5,skiprows=1)  #lee el excel usando panda
             return base
         
@@ -160,5 +191,4 @@ class Reporte:
         self.reporte = {
             'IES_ID' : id
         }
-    
-
+"""

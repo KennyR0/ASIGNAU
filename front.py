@@ -1,11 +1,11 @@
 import tkinter as tk
 from tkinter import messagebox
-from Backend import Administrador,Postulante
+from Backend import Base_Dato,BD_ADMIN,BD_USUARIO
 
 
 class Login:
-    def __init__(self, ventana_loging,usuario):
-        self.usuario = usuario
+    def __init__(self, ventana_loging,base:Base_Dato):
+        self.usuario = base
         self.ventana_loging = ventana_loging
         ventana_loging.title("Login")
 
@@ -122,13 +122,13 @@ class Ventana_principal():
         self.principal.geometry(f'{ancho}x{alto}+{x}+{y}')
     
     def login_postulante(self):
-        postulante = Postulante()
+        postulante = BD_USUARIO()
         self.principal.withdraw()
         ventana_login = tk.Toplevel(self.principal)
         app = Login(ventana_login,postulante)
 
     def login_admin(self):
-        admin = Administrador()
+        admin = BD_ADMIN()
         self.principal.withdraw()
         ventana_login = tk.Toplevel(self.principal)
         app = Login(ventana_login,admin)
