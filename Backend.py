@@ -11,28 +11,38 @@ class Base_Dato(ABC):
         pass
 
 class BD_ADMIN(Base_Dato):
+    
     def cargar_base(self):
-        credenciales = ["prueba1@uleam.edu.ec","ADMIN123"]
-        return credenciales
-
-class BD_USUARIO(Base_Dato):
-    def cargar_base(self):
-        excel = "Postulantes.xlsx" #Nombre de nuestro archivo excel
+        excel = "Admin.xlsx" #Nombre de nuestro archivo excel
         if os.path.exists(excel): #Comprueba la ruta con os, buscando la existencia de nuestro archivo
             """
             Sheet_name= es la hoja del excel que estamos leyendo, 
             comenzando de 0, en este caso se usa la 6
             Skiprows = se salta rows/filas del excel
             """
+            base = pd.read_excel(excel,sheet_name=0,skiprows=1)  #lee el excel usando panda
+            return base
+        else:
+            return None
+
+class BD_USUARIO(Base_Dato):
+    def cargar_base(self):
+        excel = "Postulantes.xlsx" #Nombre de nuestro archivo excel
+        if os.path.exists(excel): 
             base = pd.read_excel(excel,sheet_name=5,skiprows=1)  #lee el excel usando panda
             return base
+        else:
+            return None
 
 class IniciarSesion:
     
-    def __inint__(self,intento_correo:str,intento_contra:str,bd:Base_Dato):
-        self.usuario = bd
-        if self.usuario[0] == (intento_correo) and self.usuario[1] == intento_contra:
-            print("Login exitoso")
+    def Inciar(self,intento_identifacion:str,intento_contra:str,bd:Base_Dato):
+        self.datos = bd.cargar_base() 
+        self._usuario = self.datos[
+            (self.datos["IDENTIFICACIÓN"].astype(str) == intento_identifacion) &
+            (self.datos["CONTRASEÑA"] == intento_contra)
+        ]
+        if not self._usuario.empty:
             return True
         return False
     
