@@ -1,6 +1,5 @@
-from front import Login,tk
+from front import Ventana_principal,tk
 
-
-ventana_de_logeo = tk.Tk()
-app = Login(ventana_de_logeo)
-ventana_de_logeo.mainloop()
+ventana = tk.Tk()
+app = Ventana_principal(ventana)
+ventana.mainloop()
