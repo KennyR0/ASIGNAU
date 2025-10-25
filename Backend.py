@@ -29,7 +29,7 @@ class BD_USUARIO(Base_Dato):
 
 class IniciarSesion:
     
-    def self(self,intento_correo:str,intento_contra:str,bd:Base_Dato):
+    def __inint__(self,intento_correo:str,intento_contra:str,bd:Base_Dato):
         self.usuario = bd
         if self.usuario[0] == (intento_correo) and self.usuario[1] == intento_contra:
             print("Login exitoso")

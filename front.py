@@ -1,11 +1,11 @@
 import tkinter as tk
 from tkinter import messagebox
-from Backend import Base_Dato,BD_ADMIN,BD_USUARIO
+from Backend import Base_Dato,BD_ADMIN,BD_USUARIO, IniciarSesion
 
 
 class Login:
     def __init__(self, ventana_loging,base:Base_Dato):
-        
+
         self.usuario = base
         self.ventana_loging = ventana_loging
         ventana_loging.title("Login")
@@ -34,8 +34,8 @@ class Login:
             messagebox.showerror("Error", "Por favor complete todos los campos")
             return
             
-        try:
-            if self.usuario.iniciar_sesion(cedula, contraseña):
+        try: #REESCRIBIR ESTA PARTE LÓGICA
+            if IniciarSesion(cedula, contraseña,self.usuario):
                 messagebox.showinfo("Éxito", "Inicio de sesión exitoso") #Muestra  una ventana emergente
                 self.ventana_loging.destroy()  # Cerrar ventana de login
                 # Aquí se abriria la ventana de posutlante o del admin
