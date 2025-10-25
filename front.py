@@ -5,6 +5,7 @@ from Backend import Base_Dato,BD_ADMIN,BD_USUARIO
 
 class Login:
     def __init__(self, ventana_loging,base:Base_Dato):
+        
         self.usuario = base
         self.ventana_loging = ventana_loging
         ventana_loging.title("Login")

@@ -30,8 +30,12 @@ class BD_USUARIO(Base_Dato):
 class IniciarSesion:
     
     def self(self,intento_correo:str,intento_contra:str,bd:Base_Dato):
-        
-
+        self.usuario = bd
+        if self.usuario[0] == (intento_correo) and self.usuario[1] == intento_contra:
+            print("Login exitoso")
+            return True
+        return False
+    
 #Primero Invitado -> Login A/P -> LOGICA [ce][contra] -> Instancia A/P
 """
 "Clase Padre"
@@ -113,16 +117,6 @@ class Postulante(Usuario):
         print("Contraseña incorrecta")
         return False
     
-    def cargar_base(self):
-        import os
-        excel = "ASIGNAU/Base_de_dato/1._diccionario_datos_insc_eval_post.xlsx" #Nombre de nuestro archivo excel
-        if os.path.exists(excel): #Comprueba la ruta con os, buscando la existencia de nuestro archivo
-            """
-            #Sheet_name= es la hoja del excel que estamos leyendo, comenzando de 0, en este caso se usa la 6
-           #Skiprows = se salta rows/filas del excel
-        """
-            base = pd.read_excel(excel,sheet_name=5,skiprows=1)  #lee el excel usando panda
-            return base
         
     def cambiar_contraseña(self,nueva_contraseña):
         self.contraseña = nueva_contraseña
