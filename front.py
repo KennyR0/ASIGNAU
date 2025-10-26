@@ -1,19 +1,20 @@
-import tkinter as tk
-from tkinter import messagebox
+import tkinter as tk # Interfaz grafica
+from tkinter import messagebox #Interfaz de mensaje flotante
 from Backend import (Base_Dato, BD_ADMIN, BD_USUARIO, IniciarSesion, 
-                     SobrecargaUsuario, Administrador, Postulante)
-from VentanaAdministrador import VentanaAdministrador
+                     SobrecargaUsuario, Administrador, Postulante) #Importado del Backend
+from VentanaAdministrador import VentanaAdministrador 
 from VentanaPostulante import VentanaPostulante
 
 class Ventana_principal():
     def __init__(self, principal):
-        self.principal = principal
-        self.principal.title("ASIGNAU")
-        self.principal.geometry("600x400")
-        self.principal.resizable(False, False)
-        self.principal.attributes('-fullscreen', True)
         
-        self.centrar_ventana()
+        self.principal = principal
+        self.principal.title("ASIGNAU") # Titulo de la ventana
+        self.principal.geometry("600x400") # Geometria de la ventana
+        self.principal.resizable(False, False) #Controlar si se puede cambiar el tamaño
+        self.principal.attributes('-fullscreen', True) #Obliga a la ventana a ejecutarse en pantalla completa
+        
+        self.centrar_ventana() 
         
         #Barra Superior
         barra_superior = tk.Frame(principal, bg="#2c3e50", height=60)
@@ -36,14 +37,14 @@ class Ventana_principal():
             frame_botones,
             text="Iniciar sesión\ncomo postulante",
             font=("Arial", 12),
-            bg="#00af09",
-            fg="black",
-            width=20,
-            height=4,
-            cursor="hand2",
-            relief=tk.RAISED,
-            bd=3,
-            command=self.login_postulante
+            bg="#00af09", #Cambia el color del boton
+            fg="black", #Cambia el color de las letras del boton
+            width=20, #Ancho del boton
+            height=4, #Altura dedl boton
+            cursor="hand2", #Muestra que el boton se puede clickear
+            relief=tk.RAISED, #simula efecto 3d
+            bd=3, #Ancho del borde
+            command=self.login_postulante 
         )
         btn_postulante.pack(side=tk.LEFT, padx=20)
 
@@ -51,10 +52,10 @@ class Ventana_principal():
             frame_botones,
             text="Iniciar sesión\ncomo administrador",
             font=("Arial", 12),
-            bg="#5f16cc",
-            fg="black",
+            bg="#5f16cc", 
+            fg="black", 
             width=20,
-            height=4,
+            height=4, 
             cursor="hand2",
             relief=tk.RAISED,
             bd=3,
@@ -71,21 +72,28 @@ class Ventana_principal():
             width=20,
             height=4,
             cursor="hand2",
-            relief=tk.RAISED,
+            relief=tk.RAISED, #simula efecto 3d
             bd=3,
             command=self.salir
         )
         btn_salir.pack(side=tk.LEFT, padx=20)
     
     def centrar_ventana(self):
-        self.principal.update_idletasks()
-        ancho = self.principal.winfo_width()
+        
+        self.principal.update_idletasks() 
+        ancho = self.principal.winfo_width() #obtener ancho actual de un widget en pixeles
         alto = self.principal.winfo_height()
+        # Calcula la coordenada X e Y para centrar la ventana en la pantalla
         x = (self.principal.winfo_screenwidth() // 2) - (ancho // 2)
         y = (self.principal.winfo_screenheight() // 2) - (alto // 2)
+        # Aplica la nueva geometría: tamaño y posición centrada
         self.principal.geometry(f'{ancho}x{alto}+{x}+{y}')
     
     def login_postulante(self):
+        """
+        Instancia la base de dato postulante
+        Envia como argumento al login la bd
+        """
         postulante_bd = BD_USUARIO()
         self.principal.withdraw() #cierra la ventana principal
         ventana_login = tk.Toplevel(self.principal)
@@ -94,7 +102,7 @@ class Ventana_principal():
     def login_admin(self):
         admin_bd = BD_ADMIN()
         self.principal.withdraw()
-        ventana_login = tk.Toplevel(self.principal)
+        ventana_login = tk.Toplevel(self.principal) #Toplevel: Crea la ventana login sobre las demás
         app = Login(ventana_login, admin_bd, self.principal)
     
     def salir(self):
@@ -122,8 +130,8 @@ class Login:
         frame_campos = tk.Frame(ventana_loging)
         frame_campos.pack(pady=20)
 
-        # Cédula
-        self.etiqueta_cedula = tk.Label(frame_campos, text="Cédula:", 
+        # identificacion = cedula,correo,pasaporte
+        self.etiqueta_cedula = tk.Label(frame_campos, text="Identificacion:", 
                                         font=("Arial", 11))
         self.etiqueta_cedula.grid(row=0, column=0, padx=10, pady=10, sticky="e")
 
@@ -154,7 +162,7 @@ class Login:
             width=15,
             cursor="hand2"
         )
-        self.login_button.grid(row=0, column=0, padx=10)
+        self.login_button.grid(row=0, column=0, padx=10) # Posiciona los botones en una cuadrícula
 
         # Botón cancelar
         self.cancelar_button = tk.Button(
@@ -170,15 +178,19 @@ class Login:
         self.cancelar_button.grid(row=0, column=1, padx=10)
 
     def validar_login(self):
-        cedula = self.entry_cedula.get().strip()
-        contraseña = self.__entry_contraseña.get()
+        """ 
+        Se obtiene los datos previamente ingresados 
+        Se utiliza get, y strip para no dejar espacios vacíos
+        """
+        cedula = self.entry_cedula.get().strip() 
+        contraseña = self.__entry_contraseña.get() 
         
         # Validar que los campos no estén vacíos
         if not cedula or not contraseña:
             messagebox.showerror("Error", "Por favor complete todos los campos")
             return
             
-        try: #REESCRIBIR ESTA PARTE LÓGICA
+        try: 
             exito, datos_usuario = IniciarSesion.Iniciar(cedula, contraseña, self.base_datos) #metodo de la clase inicarSesion
 
             if exito and datos_usuario:
@@ -197,8 +209,7 @@ class Login:
                     elif isinstance(usuario, Postulante):
                         self.abrir_ventana_postulante(usuario) 
                 else:
-                    messagebox.showerror("Error","Error al crear la instancia")
-                # Aquí se abriria la ventana de posutlante o del admin
+                    messagebox.showerror("Error","Error al crear la instancia") #Muestra ventana emergente de error
             else:
                 messagebox.showerror("Error", "Cédula o contraseña incorrecta")
 
@@ -206,6 +217,7 @@ class Login:
             messagebox.showerror("Error", f"Error al iniciar sesión: {str(e)}")
 
     def centrar_ventana(self):
+    
         self.ventana_login.update_idletasks()
         ancho = self.ventana_login.winfo_width()
         alto = self.ventana_login.winfo_height()
@@ -225,7 +237,7 @@ class Login:
 
     def cancelar(self):
         """Cancela el login y vuelve a la ventana principal"""
-        self.ventana_login.destroy()
-        self.ventana_principal.deiconify()
+        self.ventana_login.destroy() #Destruye la ventana login
+        self.ventana_principal.deiconify() #Restaura la ventana previamente eliminada con withdrwaw
 
 

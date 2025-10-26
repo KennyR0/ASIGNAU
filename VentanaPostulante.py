@@ -81,14 +81,13 @@ class VentanaPostulante:
 
     def mostrar_info(self):
         """Muestra toda la información del postulante"""
-        info = self.postulante.mostrar_informacion()
-        mensaje = "\n".join([f"{k}: {v}" for k, v in info.items()])
-        messagebox.showinfo("Información del Postulante", mensaje)
+        info = self.postulante.mostrar_informacion() #llama al método de la clase dentro del backend
+        mensaje = "\n".join([f"{c}: {v}" for c, v in info.items()]) #Muestra el diccionario por línea de Clave: Valor
+        messagebox.showinfo("Información del Postulante", mensaje) #Muestra la información en un mensaje flotante 
 
     def cambiar_contraseña(self):
         pass
         
-
     def cerrar_sesion(self):
         """Cierra la sesión y vuelve a la ventana principal"""
         self.ventana.destroy()

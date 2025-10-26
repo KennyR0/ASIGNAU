@@ -24,7 +24,7 @@ class VentanaAdministrador:
         titulo.pack(pady=10)
         
         info = tk.Label(barra_superior, 
-                       text=f"ID: {self.admin.id} | Cédula: {self.admin.cedula} | Periodo: {self.admin.Periodo}", 
+                       text=f"ID: {self.admin.id} | Cédula: {self.admin._cedula} | Periodo: {self.admin.Periodo}", 
                        font=("Arial", 10), 
                        bg="#2c3e50", 
                        fg="white")
@@ -54,9 +54,9 @@ class VentanaAdministrador:
 
     def mostrar_info(self):
         """Muestra toda la información del administrador"""
-        info = self.admin.mostrar_informacion()
-        mensaje = "\n".join([f"{k}: {v}" for k, v in info.items()])
-        messagebox.showinfo("Información del Administrador", mensaje)
+        info = self.admin.mostrar_informacion() #llama al método de la clase dentro del backend
+        mensaje = "\n".join([f"{c}: {v}" for c, v in info.items()]) #Muestra el diccionario por línea de Clave: Valor
+        messagebox.showinfo("Información del Administrador", mensaje) #Muestra la información en un mensaje flotante 
 
     def cerrar_sesion(self):
         """Cierra la sesión y vuelve a la ventana principal"""

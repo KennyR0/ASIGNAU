@@ -1,15 +1,17 @@
-import pandas as pd
-from abc import abstractmethod,ABC
-from typing import Optional, Dict, Any
-import os
-from dataclasses import dataclass 
+import pandas as pd # libreria para leer y sobreescribir la base de datos(excel)
+from abc import abstractmethod,ABC #libreria para crear clases abstractas e interfaces
+from typing import Optional, Dict, Any # Mejorar la legibilidad del codigo
+import os # Libreria para interactuar con el sistema operativo y leer archivos
+from dataclasses import dataclass #Crear clases mas sencillamente
 
 #ASIGNAU (ASIGNACIÓN UNIVERSITARIA)
 
+#Inyeccion de dependencia
 class Base_Dato(ABC):
     
     @abstractmethod
-    def cargar_base(self):
+    def cargar_base(self): 
+        """Carga la base de datos desde el excel """
         pass
 
     @abstractmethod
@@ -25,9 +27,9 @@ class BD_ADMIN(Base_Dato):
             """
             Sheet_name= es la hoja del excel que estamos leyendo, 
             comenzando de 0, en este caso se usa la 6
-            Skiprows = se salta rows/filas del excel
+            Skiprows = se salta filas del excel
             """
-            base = pd.read_excel(excel,sheet_name=0,skiprows=1)  #lee el excel usando panda
+            base = pd.read_excel(excel,sheet_name=0,skiprows=1)  #lee el excel usando pandas
             return base
 
         else:
@@ -75,7 +77,7 @@ class BD_USUARIO(Base_Dato):
         
         return None
 
-#Iyección de Datos
+#Inyección de Datos
 class IniciarSesion:
     
     @classmethod
@@ -95,21 +97,21 @@ class IniciarSesion:
 "Clase Padre"
 class Usuario(ABC):
     
+    """ Muestra los datos del usuario """
     @abstractmethod
     def mostrar_informacion(self):
         pass
-
+    
 "Clase Hija"
 @dataclass
 class Administrador(Usuario):
-
     #Atributo de clase
-    Periodo  = "2025 - 2"
-
+    Periodo = "2025 - 2"
+    
     #Atributos de instancia
     identificacion: str = ""
     nombre: str = ""
-    cedula: str = ""
+    _cedula: str = ""
     id: int = 0
 
     #Metodos
@@ -121,7 +123,7 @@ class Administrador(Usuario):
         return cls(
             identificacion=str(datos.get("IDENTIFICACIÓN", "")),
             nombre=str(datos.get("NOMBRE", "")),
-            cedula=str(datos.get("CEDULA", "")),
+            _cedula=str(datos.get("CEDULA", "")),
             id=int(datos.get("ID", 0))
         )
     
@@ -131,7 +133,7 @@ class Administrador(Usuario):
             'tipo': 'Administrador',
             'identificacion': self.identificacion,
             'nombre': self.nombre,
-            'cedula': self.cedula,
+            'cedula': self._cedula,
             'id': self.id,
             'periodo': self.Periodo
         }
@@ -148,8 +150,7 @@ class Administrador(Usuario):
 "Clase Hija"
 @dataclass
 class Postulante(Usuario):
-    """Clase para postulantes del sistema"""
-    
+
     # Atributos de instancia
     identificacion: str = ""
     contraseña: str = ""
@@ -165,7 +166,7 @@ class Postulante(Usuario):
     @classmethod
     def crear_desde_bd(cls, datos: Dict[str, Any]) :
         """
-        Crea una instancia de Postulante desde los datos de la BD
+        Crea una instancia de Postulante desde los datos del excel
         """
         return cls(
             identificacion=str(datos.get("IDENTIFICACIÓN", "")),
@@ -216,7 +217,7 @@ class SobrecargaUsuario:
         """
         Crea la instancia correcta de usuario según el tipo de base de datos
         """
-        if isinstance(bd, BD_ADMIN):
+        if isinstance(bd, BD_ADMIN): 
             return Administrador.crear_desde_bd(datos)
         elif isinstance(bd, BD_USUARIO):
             return Postulante.crear_desde_bd(datos)
