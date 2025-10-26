@@ -1,13 +1,20 @@
 import pandas as pd
 from abc import abstractmethod,ABC
+from typing import Optional, Dict, Any
 import os
+from dataclasses import dataclass 
+
 #ASIGNAU (ASIGNACIÓN UNIVERSITARIA)
 
-#Iyección de
 class Base_Dato(ABC):
     
     @abstractmethod
     def cargar_base(self):
+        pass
+
+    @abstractmethod
+    def obtener_usuario(self, identificacion: str, contraseña: str):
+        """Obtiene los datos completos del usuario si las credenciales son válidas"""
         pass
 
 class BD_ADMIN(Base_Dato):
@@ -22,9 +29,28 @@ class BD_ADMIN(Base_Dato):
             """
             base = pd.read_excel(excel,sheet_name=0,skiprows=1)  #lee el excel usando panda
             return base
+
         else:
             return None
 
+    def obtener_usuario(self, identificacion: str, contraseña: str):
+        """Obtiene los datos del administrador"""
+        datos = self.cargar_base()
+        if datos is None:
+            return None
+        
+        """ Comprobamos si existe el usuario"""
+        usuario = datos[
+            (datos["IDENTIFICACIÓN"].astype(str) == identificacion) &
+            (datos["CONTRASEÑA"] == contraseña)
+        ]
+        
+        if not usuario.empty:
+            # Convertir la fila a diccionario
+            return usuario.iloc[0].to_dict()
+        
+        return None
+    
 class BD_USUARIO(Base_Dato):
     def cargar_base(self):
         excel = "Postulantes.xlsx" #Nombre de nuestro archivo excel
@@ -33,64 +59,82 @@ class BD_USUARIO(Base_Dato):
             return base
         else:
             return None
+        
+    def obtener_usuario(self, identificacion: str, contraseña: str):
+        datos = self.cargar_base()
+        if datos is None:
+            return None
+        
+        usuario = datos[
+            (datos["IDENTIFICACIÓN"].astype(str) == identificacion) &
+            (datos["CONTRASEÑA"] == contraseña)
+        ]
+        
+        if not usuario.empty:
+            return usuario.iloc[0].to_dict()
+        
+        return None
 
+#Iyección de Datos
 class IniciarSesion:
     
-    def Inciar(self,intento_identifacion:str,intento_contra:str,bd:Base_Dato):
-        self.datos = bd.cargar_base() 
-        self._usuario = self.datos[
-            (self.datos["IDENTIFICACIÓN"].astype(str) == intento_identifacion) &
-            (self.datos["CONTRASEÑA"] == intento_contra)
-        ]
-        if not self._usuario.empty:
-            return True
-        return False
+    @classmethod
+    def Iniciar(cls, intento_identificacion: str, intento_contra: str, bd: Base_Dato):
+        """
+        Valida las credenciales y retorna los datos del usuario
+        Retorna: (boolean, dict: datos_usuario)
+        """
+        datos_usuario = bd.obtener_usuario(intento_identificacion, intento_contra)
+        
+        if datos_usuario is not None:
+            return True, datos_usuario
+        
+        return False, None
     
-#Primero Invitado -> Login A/P -> LOGICA [ce][contra] -> Instancia A/P
-"""
+
 "Clase Padre"
 class Usuario(ABC):
-
-
+    
     @abstractmethod
-    def iniciar_sesion(self):
+    def mostrar_informacion(self):
         pass
-
-    @abstractmethod
-    def cargar_base(self):
-        pass
-
 
 "Clase Hija"
+@dataclass
 class Administrador(Usuario):
 
     #Atributo de clase
     Periodo  = "2025 - 2"
+
     #Atributos de instancia
-    def __init__(self, usuario):
-        self.admin = {
-        #CARGARIA EL USUARIO LOGIADO
-        }
-    
+    identificacion: str = ""
+    nombre: str = ""
+    cedula: str = ""
+    id: int = 0
+
     #Metodos
-    def iniciar_sesion(self,intento_correo:str,intento_contra:str):
-        print(f"Paso la cedula: {intento_correo} y la contraseña: {intento_contra}")
-        admin = self.cargar_base()
-        # Verificar contraseña
-        if admin[0] == (intento_correo) and admin[1] == intento_contra:
-            print("Login exitoso")
-            return True
-        
-        print("Contraseña incorrecta")
-        return False
+    @classmethod
+    def crear_desde_bd(cls, datos: Dict[str, Any]):
+        """
+        Crea una instancia de Administrador desde el excel
+        """
+        return cls(
+            identificacion=str(datos.get("IDENTIFICACIÓN", "")),
+            nombre=str(datos.get("NOMBRE", "")),
+            cedula=str(datos.get("CEDULA", "")),
+            id=int(datos.get("ID", 0))
+        )
     
-    def visualizar_ventana(self):
-        #Aqui visualizaria la ventana de login
-        pass
-    
-    def cargar_base(self):
-        credenciales = ["prueba1@uleam.edu.ec","ADMIN123"]
-        return credenciales
+    #Métodos 
+    def mostrar_informacion(self):
+        return {
+            'tipo': 'Administrador',
+            'identificacion': self.identificacion,
+            'nombre': self.nombre,
+            'cedula': self.cedula,
+            'id': self.id,
+            'periodo': self.Periodo
+        }
         
     def subir_malla(self):
         return print("Se ha subido nueva malla curricular")
@@ -102,36 +146,84 @@ class Administrador(Usuario):
         return self.estado
         
 "Clase Hija"
+@dataclass
 class Postulante(Usuario):
+    """Clase para postulantes del sistema"""
     
-    #Atributos de Instancia 
-    def __init__(self):
-        self.postulante = {
-            
-        }
+    # Atributos de instancia
+    identificacion: str = ""
+    contraseña: str = ""
+    fecha_postulacion: str = ""
+    puntaje_postulacion: float = 0.0
+    segmento_aspirante: int = 0
+    instancia_postulacion: int = 0
+    prioridad_carrera: int = 0
+    nombre_carrera: str = ""
+    ofa_id: str = ""
+    cus_id: str = ""
+    
+    @classmethod
+    def crear_desde_bd(cls, datos: Dict[str, Any]) :
+        """
+        Crea una instancia de Postulante desde los datos de la BD
+        """
+        return cls(
+            identificacion=str(datos.get("IDENTIFICACIÓN", "")),
+            contraseña=str(datos.get("CONTRASEÑA", "")),
+            fecha_postulacion=str(datos.get("FECHA_POSTULACION", "")),
+            puntaje_postulacion=float(datos.get("PUNTAJE_POSTULACION", 0.0)),
+            segmento_aspirante=int(datos.get("SEGMENTO_ASPIRANTE", 0)),
+            instancia_postulacion=int(datos.get("INSTANCIA_POSTULACION", 0)),
+            prioridad_carrera=int(datos.get("PRIORIDAD_ELECCION_CARRERA", 0)),
+            nombre_carrera=str(datos.get("NOMBRE_CARRERA", "")),
+            ofa_id=str(datos.get("OFA_ID", "")),
+            cus_id=str(datos.get("CUS_ID", ""))
+        )
 
     #Metodos
+    def mostrar_informacion(self):
+        return {
+            'tipo': 'Postulante',
+            'identificacion': self.identificacion,
+            'fecha_postulacion': self.fecha_postulacion,
+            'puntaje': self.puntaje_postulacion,
+            'segmento': self.segmento_aspirante,
+            'carrera': self.nombre_carrera,
+            'prioridad': self.prioridad_carrera
+        }
+
     def ver_puntaje(self):
-        return self.puntaje
-
-    def iniciar_sesion(self,intento_cedu:str,intento_contra:str):
-        print(f"Paso la cedula: {intento_cedu} y la contraseña: {intento_contra}")
-        base_dato = self.cargar_base()
-        usuario = base_dato[base_dato['IDENTIFICACION'] == intento_cedu]
-        #tengo miedo che
-        # Verificar contraseña
-        if str(usuario.iloc[7]['CONTRASEÑA']) == (intento_contra):
-            print("Login exitoso")
-            return True
-        
-        print("Contraseña incorrecta")
-        return False
+        return self.puntaje_postulacion
     
-        
-    def cambiar_contraseña(self,nueva_contraseña):
-        self.contraseña = nueva_contraseña
-        return (f"Contraseña cambiada ")
+    def obtener_postulaciones(self):
+        """Retorna información de las postulaciones del usuario"""
+        return {
+            'carrera': self.nombre_carrera,
+            'prioridad': self.prioridad_carrera,
+            'puntaje': self.puntaje_postulacion,
+            'segmento': self.segmento_aspirante
+        }
 
+    def cambiar_contraseña(self):
+        pass
+
+
+class SobrecargaUsuario:
+    """Sobrecarga para crear instancias de usuarios según el tipo de Base De Datos"""
+    
+    @staticmethod
+    def crear_usuario(bd: Base_Dato, datos: Dict[str, Any]):
+        """
+        Crea la instancia correcta de usuario según el tipo de base de datos
+        """
+        if isinstance(bd, BD_ADMIN):
+            return Administrador.crear_desde_bd(datos)
+        elif isinstance(bd, BD_USUARIO):
+            return Postulante.crear_desde_bd(datos)
+        else:
+            return None
+        
+#CAMBIAR ESTAS CLASES         
 class Solicitud_cupo():
     #Atributo de clase
     Periodo = "2025 - 2"
@@ -192,7 +284,4 @@ class Asignacion:
 class Reporte:
 
     def __init__(self):
-        self.reporte = {
-            'IES_ID' : id
-        }
-"""
+        pass
