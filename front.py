@@ -240,4 +240,37 @@ class Login:
         self.ventana_login.destroy() #Destruye la ventana login
         self.ventana_principal.deiconify() #Restaura la ventana previamente eliminada con withdrwaw
 
+class RegistroActividad:
+    """Clase auxiliar para registrar eventos del sistema."""
+    LOG_FILE = "registro_actividad.txt"
+
+    @staticmethod
+    def registrar_evento(mensaje: str):
+        fecha = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        linea = f"[{fecha}] {mensaje}\n"
+        with open(RegistroActividad.LOG_FILE, "a", encoding="utf-8") as archivo:
+            archivo.write(linea)
+
+
+def parchear_eventos(Ventana_principal, Login):
+    """Agrega registro de eventos a métodos clave sin modificar los originales."""
+
+    # Guardamos el método original .salir() y lo ampliamos
+    original_salir = Ventana_principal.salir
+    def nuevo_salir(self):
+        RegistroActividad.registrar_evento("El usuario cerró la aplicación desde la ventana principal.")
+        original_salir(self)
+    Ventana_principal.salir = nuevo_salir
+
+    # Guardamos el método original .validar_login() y lo ampliamos
+    original_validar = Login.validar_login
+    def nuevo_validar(self):
+        cedula = self.entry_cedula.get().strip()
+        RegistroActividad.registrar_evento(f"Intento de inicio de sesión con ID: {cedula}")
+        original_validar(self)
+    Login.validar_login = nuevo_validar
+
+
+# Activamos el parche una sola vez
+parchear_eventos(Ventana_principal, Login)
 
