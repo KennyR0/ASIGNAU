@@ -10,9 +10,9 @@ class Ventana_principal():
         
         self.principal = principal
         self.principal.title("ASIGNAU") # Titulo de la ventana
-        self.principal.geometry("600x400") # Geometria de la ventana
+        self.principal.geometry("900x600") # Geometria de la ventana
         self.principal.resizable(False, False) #Controlar si se puede cambiar el tamaño
-        self.principal.attributes('-fullscreen', True) #Obliga a la ventana a ejecutarse en pantalla completa
+        self.principal.attributes('-fullscreen', True) #No obliga a la ventana a ejecutarse en pantalla completa
         
         self.centrar_ventana() 
         
@@ -25,7 +25,7 @@ class Ventana_principal():
                          font=("Arial", 18, "bold"), bg="#2c3e50", fg="white")
         titulo.pack(pady=15)
 
-        #Frames del sistema
+        #Frames del sistemaa
         frame_principal = tk.Frame(principal, bg="white")
         frame_principal.pack(fill=tk.BOTH, expand=True, padx=20, pady=40)
 
