@@ -77,7 +77,7 @@ class BD_USUARIO(Base_Dato):
         return None
     
 #Contexto que usa la estrategia:
-#Iyección de Datos
+#Iyección de Datoss
 class IniciarSesion:
     
     @classmethod
