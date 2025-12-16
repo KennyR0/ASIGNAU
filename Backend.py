@@ -1,22 +1,20 @@
-import pandas as pd # libreria para leer y sobreescribir la base de datos(excel)
-from abc import abstractmethod,ABC #libreria para crear clases abstractas e interfaces
-from typing import Optional, Dict, Any # Mejorar la legibilidad del codigo
-import os # Libreria para interactuar con el sistema operativo y leer archivos
-from dataclasses import dataclass #Crear clases mas sencillamente
+import pandas as pd
+from abc import abstractmethod,ABC
+from typing import Optional, Dict, Any
+import os
+from dataclasses import dataclass 
 
 #ASIGNAU (ASIGNACIÓN UNIVERSITARIA)
-
-#Inyeccion de dependencia
+# Interfaz de estrategia de base de datos
 class Base_Dato(ABC):
     
     @abstractmethod
-    def cargar_base(self): 
-        """Carga la base de datos desde el excel """
+    def cargar_base(self):
         pass
 
     @abstractmethod
     def obtener_usuario(self, identificacion: str, contraseña: str):
-        """Obtiene los datos completos del usuario si las credenciales son válidas"""
+        #Obtiene los datos completos del usuario si las credenciales son válidas
         pass
 
 class BD_ADMIN(Base_Dato):
@@ -27,21 +25,21 @@ class BD_ADMIN(Base_Dato):
             """
             Sheet_name= es la hoja del excel que estamos leyendo, 
             comenzando de 0, en este caso se usa la 6
-            Skiprows = se salta filas del excel
+            Skiprows = se salta rows/filas del excel
             """
-            base = pd.read_excel(excel,sheet_name=0,skiprows=1)  #lee el excel usando pandas
+            base = pd.read_excel(excel,sheet_name=0,skiprows=1)  #lee el excel usando panda
             return base
 
         else:
             return None
 
     def obtener_usuario(self, identificacion: str, contraseña: str):
-        """Obtiene los datos del administrador"""
+        #Obtiene los datos del administrador
         datos = self.cargar_base()
         if datos is None:
             return None
         
-        """ Comprobamos si existe el usuario"""
+        #Comprobamos si existe el usuario
         usuario = datos[
             (datos["IDENTIFICACIÓN"].astype(str) == identificacion) &
             (datos["CONTRASEÑA"] == contraseña)
@@ -52,7 +50,8 @@ class BD_ADMIN(Base_Dato):
             return usuario.iloc[0].to_dict()
         
         return None
-    
+
+
 class BD_USUARIO(Base_Dato):
     def cargar_base(self):
         excel = "Postulantes.xlsx" #Nombre de nuestro archivo excel
@@ -76,8 +75,9 @@ class BD_USUARIO(Base_Dato):
             return usuario.iloc[0].to_dict()
         
         return None
-
-#Inyección de Datos
+    
+#Contexto que usa la estrategia:
+#Iyección de Datos
 class IniciarSesion:
     
     @classmethod
@@ -93,37 +93,37 @@ class IniciarSesion:
         
         return False, None
     
-
+# ====== Interfaz del usuario ======
 "Clase Padre"
 class Usuario(ABC):
     
-    """ Muestra los datos del usuario """
     @abstractmethod
     def mostrar_informacion(self):
         pass
-    
-"Clase Hija"
+
+# ====== Implementaciones concretas de usuario ======
+"Clase Hija Administrador"
 @dataclass
 class Administrador(Usuario):
+
     #Atributo de clase
-    Periodo = "2025 - 2"
-    
+    Periodo  = "2025 - 2"
+
     #Atributos de instancia
     identificacion: str = ""
     nombre: str = ""
-    _cedula: str = ""
+    cedula: str = ""
     id: int = 0
 
     #Metodos
+    #Utilizacion del factory method
     @classmethod
-    def crear_desde_bd(cls, datos: Dict[str, Any]):
-        """
-        Crea una instancia de Administrador desde el excel
-        """
+    def crear_desde_bd(cls, datos: Dict[str, Any]): #Crea una instancia de Administrador desde el excel
+
         return cls(
             identificacion=str(datos.get("IDENTIFICACIÓN", "")),
             nombre=str(datos.get("NOMBRE", "")),
-            _cedula=str(datos.get("CEDULA", "")),
+            cedula=str(datos.get("CEDULA", "")),
             id=int(datos.get("ID", 0))
         )
     
@@ -133,7 +133,7 @@ class Administrador(Usuario):
             'tipo': 'Administrador',
             'identificacion': self.identificacion,
             'nombre': self.nombre,
-            'cedula': self._cedula,
+            'cedula': self.cedula,
             'id': self.id,
             'periodo': self.Periodo
         }
@@ -147,10 +147,10 @@ class Administrador(Usuario):
     def esta_activo(self):
         return self.estado
         
-"Clase Hija"
+"Clase Hija Postulante"
 @dataclass
-class Postulante(Usuario):
-
+class Postulante(Usuario): 
+    
     # Atributos de instancia
     identificacion: str = ""
     contraseña: str = ""
@@ -163,11 +163,10 @@ class Postulante(Usuario):
     ofa_id: str = ""
     cus_id: str = ""
     
+    #Utilizacion del factory method
     @classmethod
-    def crear_desde_bd(cls, datos: Dict[str, Any]) :
-        """
-        Crea una instancia de Postulante desde los datos del excel
-        """
+    def crear_desde_bd(cls, datos: Dict[str, Any]) : #Crea una instancia de Postulante desde los datos de la BD
+
         return cls(
             identificacion=str(datos.get("IDENTIFICACIÓN", "")),
             contraseña=str(datos.get("CONTRASEÑA", "")),
@@ -196,8 +195,7 @@ class Postulante(Usuario):
     def ver_puntaje(self):
         return self.puntaje_postulacion
     
-    def obtener_postulaciones(self):
-        """Retorna información de las postulaciones del usuario"""
+    def obtener_postulaciones(self): #Retorna información de las postulaciones del usuario
         return {
             'carrera': self.nombre_carrera,
             'prioridad': self.prioridad_carrera,
@@ -208,23 +206,20 @@ class Postulante(Usuario):
     def cambiar_contraseña(self):
         pass
 
-
-class SobrecargaUsuario:
-    """Sobrecarga para crear instancias de usuarios según el tipo de Base De Datos"""
+#Utilizacion del factory method
+class SobrecargaUsuario: #Sobrecarga para crear instancias de usuarios según el tipo de Base De Datos
     
     @staticmethod
-    def crear_usuario(bd: Base_Dato, datos: Dict[str, Any]):
-        """
-        Crea la instancia correcta de usuario según el tipo de base de datos
-        """
-        if isinstance(bd, BD_ADMIN): 
+    def crear_usuario(bd: Base_Dato, datos: Dict[str, Any]): #Crea la instancia correcta de usuario según el tipo de base de datos
+
+        if isinstance(bd, BD_ADMIN):
             return Administrador.crear_desde_bd(datos)
         elif isinstance(bd, BD_USUARIO):
             return Postulante.crear_desde_bd(datos)
         else:
             return None
         
-#CAMBIAR ESTAS CLASES         
+
 class Solicitud_cupo():
     #Atributo de clase
     Periodo = "2025 - 2"
