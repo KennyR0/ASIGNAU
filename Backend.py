@@ -221,51 +221,26 @@ class SobrecargaUsuario: #Sobrecarga para crear instancias de usuarios según el
 
 
 # ====== PATRÓN FACADE ======
-"""
-Facade para el sistema de autenticación.
-Proporciona una interfaz simplificada que oculta la complejidad
-de la interacción entre Base_Dato, IniciarSesion y SobrecargaUsuario.
-
-Beneficios:
-- El frontend no necesita conocer las clases internas del backend
-- Centraliza toda la lógica de autenticación en un solo lugar
-- Reduce el acoplamiento entre capas
-- Facilita cambios futuros en el proceso de autenticación
-"""
-
 class SistemaAutenticacion:
     """
     Facade que simplifica el proceso de autenticación.
     Encapsula la creación de bases de datos, validación de credenciales
     y creación de instancias de usuario.
     """
-    
     @staticmethod
     def login_postulante(identificacion: str, contraseña: str):
-        """
-        Autentica un postulante y retorna su instancia.
-        Retorna: (exito: bool, usuario: Postulante o None, mensaje: str)
-        """
         return SistemaAutenticacion._autenticar(
             identificacion, contraseña, BD_USUARIO()
         )
     
     @staticmethod
     def login_administrador(identificacion: str, contraseña: str):
-        """
-        Autentica un administrador y retorna su instancia.
-        Retorna: (exito: bool, usuario: Administrador o None, mensaje: str)
-        """
         return SistemaAutenticacion._autenticar(
             identificacion, contraseña, BD_ADMIN()
         )
     
     @staticmethod
     def _autenticar(identificacion: str, contraseña: str, bd: Base_Dato):
-        """
-        Método privado que realiza la autenticación.
-        Coordina IniciarSesion y SobrecargaUsuario internamente.
-        """
         try:
             # Validar credenciales
             exito, datos_usuario = IniciarSesion.Iniciar(identificacion, contraseña, bd)
@@ -286,10 +261,7 @@ class SistemaAutenticacion:
     
     @staticmethod
     def obtener_tipo_usuario(usuario) -> str:
-        """
-        Retorna el tipo de usuario como string.
-        Útil para el frontend sin necesidad de usar isinstance.
-        """
+        #Retorna el tipo de usuario como string.
         if isinstance(usuario, Administrador):
             return "administrador"
         elif isinstance(usuario, Postulante):
@@ -358,3 +330,4 @@ class Reporte:
 
     def __init__(self):
         pass
+
