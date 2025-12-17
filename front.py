@@ -1,7 +1,6 @@
 import tkinter as tk # Interfaz grafica
 from tkinter import messagebox #Interfaz de mensaje flotante
-from Backend import (Base_Dato, BD_ADMIN, BD_USUARIO, IniciarSesion, 
-                     SobrecargaUsuario, Administrador, Postulante) #Importado del Backend
+from Backend import (SistemaAutenticacion, Administrador, Postulante) #Importado del Backend - Usando el Facade
 from VentanaAdministrador import VentanaAdministrador 
 from VentanaPostulante import VentanaPostulante
 
@@ -91,27 +90,27 @@ class Ventana_principal():
     
     def login_postulante(self):
         """
-        Instancia la base de dato postulante
-        Envia como argumento al login la bd
+        Usa el Facade SistemaAutenticacion para el login de postulante
         """
-        postulante_bd = BD_USUARIO()
         self.principal.withdraw() #cierra la ventana principal
         ventana_login = tk.Toplevel(self.principal)
-        app = Login(ventana_login, postulante_bd, self.principal)
+        app = Login(ventana_login, "postulante", self.principal)
 
     def login_admin(self):
-        admin_bd = BD_ADMIN()
+        """
+        Usa el Facade SistemaAutenticacion para el login de administrador
+        """
         self.principal.withdraw()
         ventana_login = tk.Toplevel(self.principal) #Toplevel: Crea la ventana login sobre las demás
-        app = Login(ventana_login, admin_bd, self.principal)
+        app = Login(ventana_login, "administrador", self.principal)
     
     def salir(self):
         self.principal.destroy()
 
 class Login:
-    def __init__(self, ventana_loging, base:Base_Dato, ventana_principal):
+    def __init__(self, ventana_loging, tipo_usuario: str, ventana_principal):
 
-        self.base_datos = base
+        self.tipo_usuario = tipo_usuario  # "postulante" o "administrador"
         self.ventana_login = ventana_loging
         self.ventana_principal = ventana_principal
         
@@ -179,8 +178,8 @@ class Login:
 
     def validar_login(self):
         """ 
-        Se obtiene los datos previamente ingresados 
-        Se utiliza get, y strip para no dejar espacios vacíos
+        Usa el Facade SistemaAutenticacion para simplificar el proceso de login.
+        El Facade oculta la complejidad de las clases internas del backend.
         """
         cedula = self.entry_cedula.get().strip() 
         contraseña = self.__entry_contraseña.get() 
@@ -189,32 +188,25 @@ class Login:
         if not cedula or not contraseña:
             messagebox.showerror("Error", "Por favor complete todos los campos")
             return
+        
+        # Usar el Facade según el tipo de usuario
+        if self.tipo_usuario == "postulante":
+            exito, usuario, mensaje = SistemaAutenticacion.login_postulante(cedula, contraseña)
+        else:
+            exito, usuario, mensaje = SistemaAutenticacion.login_administrador(cedula, contraseña)
+        
+        if exito and usuario:
+            messagebox.showinfo("Éxito", mensaje)
+            self.ventana_login.destroy()
             
-        try: 
-            exito, datos_usuario = IniciarSesion.Iniciar(cedula, contraseña, self.base_datos) #metodo de la clase inicarSesion
-
-            if exito and datos_usuario:
-                """
-                Si el usuario se logea con éxito, se utiiza la SobrecargaUsuario para instanciar
-                ya sea admin o postulante.
-                """
-                usuario = SobrecargaUsuario.crear_usuario(self.base_datos, datos_usuario)
-                if usuario:
-                    messagebox.showinfo("Éxito", "Inicio de sesión exitoso") #Muestra  una ventana emergente
-                    self.ventana_login.destroy()
-                    
-                    # Con la funcion isinstance, crea la instancia dependiendo del usuario
-                    if isinstance(usuario, Administrador):
-                        self.abrir_ventana_admin(usuario)
-                    elif isinstance(usuario, Postulante):
-                        self.abrir_ventana_postulante(usuario) 
-                else:
-                    messagebox.showerror("Error","Error al crear la instancia") #Muestra ventana emergente de error
-            else:
-                messagebox.showerror("Error", "Cédula o contraseña incorrecta")
-
-        except Exception as e: #Control de excepciones
-            messagebox.showerror("Error", f"Error al iniciar sesión: {str(e)}")
+            # Usar el método del Facade para determinar el tipo
+            tipo = SistemaAutenticacion.obtener_tipo_usuario(usuario)
+            if tipo == "administrador":
+                self.abrir_ventana_admin(usuario)
+            elif tipo == "postulante":
+                self.abrir_ventana_postulante(usuario)
+        else:
+            messagebox.showerror("Error", mensaje)
 
     def centrar_ventana(self):
     

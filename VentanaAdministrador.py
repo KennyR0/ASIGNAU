@@ -24,7 +24,7 @@ class VentanaAdministrador:
         titulo.pack(pady=10)
         
         info = tk.Label(barra_superior, 
-                       text=f"ID: {self.admin.id} | Cédula: {self.admin._cedula} | Periodo: {self.admin.Periodo}", 
+                       text=f"ID: {self.admin.id} | Cédula: {self.admin.cedula} | Periodo: {self.admin.Periodo}", 
                        font=("Arial", 10), 
                        bg="#2c3e50", 
                        fg="white")
