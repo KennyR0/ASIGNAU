@@ -1,8 +1,8 @@
 import tkinter as tk # Interfaz grafica
 from tkinter import messagebox #Interfaz de mensaje flotante
-from Backend import (SistemaAutenticacion, Administrador, Postulante) #Importado del Backend - Usando el Facade
-from VentanaAdministrador import VentanaAdministrador 
-from VentanaPostulante import VentanaPostulante
+from Backend_Completo import (SistemaAutenticacion, Administrador, Postulante) #Importado del Backend - Usando el Facade
+from VentanaAdministrador_Completa import VentanaAdministrador 
+from VentanaPostulante_Completa import VentanaPostulante
 
 class Ventana_principal():
     def __init__(self, principal):
