@@ -1,5 +1,15 @@
-from front import Ventana_principal,tk
+"""
+Sistema ASIGNAU - Asignación Universitaria Automatizada
+Versión: 1.0.0
 
-ventana = tk.Tk()
-app = Ventana_principal(ventana)
-ventana.mainloop()
+Este es el punto de entrada principal del sistema.
+Para ejecutar: python main.py
+"""
+
+from front import Ventana_principal, tk
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = Ventana_principal(root)
+    root.mainloop()
