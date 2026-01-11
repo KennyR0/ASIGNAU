@@ -1,7 +1,7 @@
 import pandas as pd
 from typing import Optional, Dict, List, Set
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
@@ -376,12 +376,9 @@ class MotorAsignacion:
                     break
             
             # Si no se asignó, el postulante participará en el siguiente grupo
-            # Art. 52: será reasignado para continuar participando en los siguientes grupos
             if not asignado:
-                # Para bachilleres: marcar como participado solo si es grupo de bachilleres
-                # y no obtuvo cupo (participan una sola vez según Art. 52.5)
-                if grupo == GrupoAsignacion.BACHILLERES_ULTIMO_ANIO:
-                    # Solo marcar después de intentar en el último grupo de bachilleres
+                # Marcar bachiller como participado aunque no haya obtenido cupo
+                if grupo in [GrupoAsignacion.BACHILLERES_PUEBLOS, GrupoAsignacion.BACHILLERES_ULTIMO_ANIO]:
                     self.bachilleres_participaron.add(identificacion)
     
     def liberar_cupos_no_usados(self):
