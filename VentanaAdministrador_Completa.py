@@ -1,20 +1,4 @@
-"""
-Ventana de Administrador - Sistema ASIGNAU
-Versión 2.0 con Sistema de Periodos de Asignación
-
-Esta ventana permite al administrador:
-- Gestionar periodos de asignación (crear, abrir, cerrar)
-- Cargar archivos de Oferta Académica y Postulantes
-- Ejecutar el proceso completo de asignación
-- Generar reportes
-- Consultar postulantes
-"""
-
-from Backend_Completo import (
-    Administrador, 
-    Reporte, 
-    EstadoPeriodo
-)
+from Backend_Completo import (Administrador, Reporte, EstadoPeriodo)
 import tkinter as tk
 from tkinter import messagebox, ttk, scrolledtext, filedialog
 import pandas as pd

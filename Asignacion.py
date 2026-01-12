@@ -6,9 +6,9 @@ from datetime import datetime
 from enum import Enum
 
 
-# ====== ENUMERACIONES DE ASIGNACIÓN ======
+#ENUMERACIONES DE ASIGNACIÓN
 class GrupoAsignacion(Enum):
-    """Orden de asignación según Artículo 52"""
+    """Orden de asignación"""
     POLITICA_CUOTAS = 1           # 5-10% de la oferta
     VULNERABILIDAD = 2             # Al menos 10%
     MERITO_ACADEMICO = 3           # Al menos 20%
@@ -25,7 +25,7 @@ class EstadoCupo(Enum):
     LIBERADO = "LIBERADO"
 
 
-# ====== CLASE CUPO ======
+#CLASE CUPO 
 @dataclass
 class Cupo:
     """Representa un cupo disponible en una carrera"""
@@ -62,16 +62,11 @@ class Cupo:
         return self.estado == EstadoCupo.DISPONIBLE
 
 
-# ====== MOTOR DE ASIGNACIÓN ======
+#  MOTOR DE ASIGNACIÓN 
 class MotorAsignacion:
     """
-    Implementa el algoritmo de asignación de cupos según el Artículo 52
-    Cumple con:
-    - Orden de segmentos establecido
-    - Reasignación a grupos siguientes si no obtiene cupo
-    - Liberación de cupos no usados a población general
-    - Criterios de desempate (Artículo 54)
-    - Bachilleres participan una sola vez en su grupo
+    Crea los distintos posibles grupos de asignación y gestiona
+    el proceso de asignación de cupos a los postulantes 
     """
     
     # Porcentajes según Artículo 52 (para IES públicas)
@@ -132,8 +127,7 @@ class MotorAsignacion:
     
     def validar_porcentajes(self) -> bool:
         """
-        Valida que los porcentajes cumplan con los límites del Artículo 52 y 53.
-        Retorna True si son válidos, False si hay errores.
+        Valida que los porcentajes cumplan con los límites del SENESCYT
         """
         errores = []
         advertencias = []
@@ -384,8 +378,7 @@ class MotorAsignacion:
     def liberar_cupos_no_usados(self):
         """
         Libera cupos no usados y los pasa a población general.
-        Según Art. 52: si no se cumple el porcentaje por falta de demanda,
-        los cupos se liberan a población general.
+        
         """
         for cus_id in self.cupos_por_carrera:
             cupos_liberados = 0
@@ -406,7 +399,7 @@ class MotorAsignacion:
     def ejecutar_asignacion(self) -> pd.DataFrame:
         """
         Ejecuta el proceso completo de asignación siguiendo el orden
-        establecido en el Artículo 52.
+        establecido por la SENESCYT.
         
         Proceso:
         1. Segmentar oferta según porcentajes
@@ -462,7 +455,7 @@ class MotorAsignacion:
         }
 
 
-# ====== CLASE REPORTE ======
+#  CLASE REPORTE 
 class Reporte:
     """Genera reportes del proceso de asignación en formato Excel"""
     
@@ -626,7 +619,7 @@ class Reporte:
         return asignaciones_df.to_dict('records')
 
 
-# ====== GESTIÓN DE ACEPTACIÓN DE CUPOS ======
+#  GESTIÓN DE ACEPTACIÓN DE CUPOS 
 class GestorAceptacion:
     """
     Gestiona el proceso de aceptación de cupos según Artículo 56.

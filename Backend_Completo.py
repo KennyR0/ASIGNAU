@@ -5,32 +5,15 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from Asignacion import (GrupoAsignacion,EstadoCupo,Cupo,MotorAsignacion,Reporte,GestorAceptacion)
+from PeriodoAsignacion import (PeriodoAsignacion,EstadoPeriodo,FasePeriodo,ConfiguracionPeriodo,GestorPeriodos)
 
-# Importar clases de asignación desde el módulo separado
-from Asignacion import (
-    GrupoAsignacion,
-    EstadoCupo,
-    Cupo,
-    MotorAsignacion,
-    Reporte,
-    GestorAceptacion
-)
-
-# Importar clases de gestión de periodos
-from PeriodoAsignacion import (
-    PeriodoAsignacion,
-    EstadoPeriodo,
-    FasePeriodo,
-    ConfiguracionPeriodo,
-    GestorPeriodos
-)
-
-# ====== ENUMERACIONES ======
+#ENUMERACIONES 
 class SegmentoAspirante(Enum):
     POBLACION_GENERAL = 1
     POLITICA_CUOTAS = 2
 
-# ====== INTERFAZ DE ESTRATEGIA DE BASE DE DATOS ======
+#INTERFAZ DE ESTRATEGIA DE BASE DE DATOS 
 class Base_Dato(ABC):
     @abstractmethod
     def cargar_base(self):
@@ -111,7 +94,7 @@ class BD_POSTULACIONES:
             print(f"Error al guardar asignaciones: {e}")
             return False
 
-# ====== CONTEXTO DE AUTENTICACIÓN ======
+#CONTEXTO DE AUTENTICACIÓN 
 class IniciarSesion:
     @classmethod
     def Iniciar(cls, intento_identificacion: str, intento_contra: str, bd: Base_Dato):
@@ -120,13 +103,13 @@ class IniciarSesion:
             return True, datos_usuario
         return False, None
 
-# ====== INTERFAZ DE USUARIO ======
+#INTERFAZ DE USUARIO 
 class Usuario(ABC):
     @abstractmethod
     def mostrar_informacion(self):
         pass
 
-# ====== CLASE ADMINISTRADOR ======
+#CLASE ADMINISTRADOR 
 @dataclass
 class Administrador(Usuario):
     Periodo = "2025 - 2"
@@ -187,29 +170,13 @@ class Administrador(Usuario):
         return gestor.listar_periodos()
         
     def ejecutar_asignacion(self, oferta_df, postulaciones_df, porcentajes: Dict[str, float] = None, es_instituto: bool = False):
-        """
-        Ejecuta el proceso de asignación de cupos según Art. 51-53.
-        DEPRECADO: Usar ejecutar_asignacion_periodo() con el sistema de periodos.
-        
-        Args:
-            oferta_df: DataFrame con la oferta académica
-            postulaciones_df: DataFrame con las postulaciones
-            porcentajes: Diccionario con porcentajes personalizados (opcional)
-            es_instituto: True si es instituto técnico/tecnológico (Art. 53)
-        """
+        """Ejecuta la asignación de cupos con los datos proporcionados"""
         motor = MotorAsignacion(oferta_df, postulaciones_df, porcentajes, es_instituto)
         return motor.ejecutar_asignacion()
     
     def ejecutar_asignacion_periodo(self, callback_progreso=None) -> Tuple[bool, str, Dict]:
         """
         Ejecuta la asignación completa para el periodo activo.
-        Este es el método preferido que usa el sistema de periodos.
-        
-        Args:
-            callback_progreso: Función para reportar progreso
-        
-        Returns:
-            Tuple[bool, str, Dict]: (éxito, mensaje, estadísticas)
         """
         periodo = self.obtener_periodo_activo()
         if not periodo:
@@ -230,7 +197,7 @@ class Administrador(Usuario):
         reporte = Reporte()
         return reporte.generar_reporte_completo(asignaciones_df)
 
-# ====== CLASE POSTULANTE ======
+#  CLASE POSTULANTE 
 @dataclass
 class Postulante(Usuario):
     identificacion: str = ""
@@ -293,7 +260,7 @@ class Postulante(Usuario):
             return True
         return False
 
-# ====== FACTORY METHOD PARA USUARIOS ======
+#  FACTORY METHOD PARA USUARIOS 
 class SobrecargaUsuario:
     @staticmethod
     def crear_usuario(bd: Base_Dato, datos: Dict[str, Any]):
@@ -303,7 +270,7 @@ class SobrecargaUsuario:
             return Postulante.crear_desde_bd(datos)
         return None
 
-# ====== PATRÓN FACADE ======
+#  PATRÓN FACADE 
 class SistemaAutenticacion:
     @staticmethod
     def login_postulante(identificacion: str, contraseña: str):

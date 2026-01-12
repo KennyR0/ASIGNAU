@@ -1,15 +1,3 @@
-"""
-Módulo de Gestión de Periodos de Asignación
-Sistema ASIGNAU
-
-Este módulo maneja el ciclo de vida completo de un periodo de asignación:
-- Apertura de periodo
-- Carga de archivos (Oferta Académica y Postulantes)
-- Ejecución del proceso de asignación (múltiples vueltas si es necesario)
-- Cierre de periodo
-- Persistencia del estado
-"""
-
 import pandas as pd
 import json
 import os
@@ -18,7 +6,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, List, Any, Tuple
 import shutil
-
 from Asignacion import MotorAsignacion, Reporte
 
 
@@ -125,7 +112,7 @@ class PeriodoAsignacion:
             os.makedirs(carpeta)
         self._carpeta = carpeta
     
-    # ============== GESTIÓN DE ESTADO ==============
+    #GESTIÓN DE ESTADO 
     
     def puede_asignar(self) -> Tuple[bool, str]:
         """Verifica si se puede ejecutar la asignación"""
@@ -153,7 +140,7 @@ class PeriodoAsignacion:
         
         return True, "Puede cargar archivos."
     
-    # ============== CARGA DE ARCHIVOS ==============
+    #CARGA DE ARCHIVOS
     
     def cargar_oferta_academica(self, ruta_archivo: str) -> Tuple[bool, str]:
         """
@@ -259,22 +246,17 @@ class PeriodoAsignacion:
         elif self._oferta_df is not None or self._postulantes_df is not None:
             self.fase = FasePeriodo.CARGA_DATOS
     
-    # ============== PROCESO DE ASIGNACIÓN ==============
+    #PROCESO DE ASIGNACIÓN
     
     def ejecutar_asignacion_completa(self, callback_progreso=None) -> Tuple[bool, str, Dict]:
         """
         Ejecuta el proceso completo de asignación.
         
         Este método:
-        1. Ejecuta la primera vuelta de asignación según Art. 52
-        2. Si hay cupos disponibles, ejecuta vueltas adicionales de reasignación
-        3. Cierra el proceso cuando no hay más cambios o se alcanza el límite de vueltas
-        
-        Args:
-            callback_progreso: Función opcional para reportar progreso
-        
-        Returns:
-            Tuple[bool, str, Dict]: (éxito, mensaje, estadísticas)
+        1. Ejecuta todas las vueltas de asignación permitidas
+        2. Actualiza el estado del periodo
+        3. Guarda los resultados en archivos
+
         """
         puede, mensaje = self.puede_asignar()
         if not puede:
@@ -425,7 +407,7 @@ class PeriodoAsignacion:
             self.guardar()
             return False, f"Error durante la asignación: {str(e)}", {}
     
-    # ============== CIERRE DE PERIODO ==============
+    #CIERRE DE PERIODO 
     
     def cerrar_periodo(self) -> Tuple[bool, str]:
         """
@@ -445,7 +427,7 @@ class PeriodoAsignacion:
         
         return True, f"Periodo {self.codigo} cerrado exitosamente."
     
-    # ============== PERSISTENCIA ==============
+    #PERSISTENCIA
     
     def guardar(self):
         """Guarda el estado del periodo en un archivo JSON"""
@@ -584,7 +566,7 @@ class PeriodoAsignacion:
         periodos.sort(key=lambda x: x['fecha_creacion'], reverse=True)
         return periodos
     
-    # ============== CONSULTAS ==============
+    #CONSULTAS
     
     def obtener_resumen(self) -> Dict:
         """Obtiene un resumen del estado del periodo"""
@@ -622,7 +604,7 @@ class PeriodoAsignacion:
         return self._postulantes_df
 
 
-# ============== GESTOR DE PERIODOS ==============
+#GESTOR DE PERIODOS
 
 class GestorPeriodos:
     """
