@@ -622,10 +622,7 @@ class Reporte:
 #  GESTIÓN DE ACEPTACIÓN DE CUPOS 
 class GestorAceptacion:
     """
-    Gestiona el proceso de aceptación de cupos según Artículo 56.
-    - El cupo aceptado no puede ser modificado ni anulado
-    - No se puede renunciar al cupo
-    - Solo se puede aceptar un único cupo
+    Gestiona el proceso de aceptación de cupos.
     """
     
     def __init__(self, archivo_asignaciones="Asignaciones.xlsx"):
