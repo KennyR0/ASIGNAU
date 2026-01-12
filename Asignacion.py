@@ -625,17 +625,50 @@ class GestorAceptacion:
     Gestiona el proceso de aceptación de cupos.
     """
     
-    def __init__(self, archivo_asignaciones="Asignaciones.xlsx"):
-        self.archivo = archivo_asignaciones
+    def __init__(self, archivo_asignaciones=None):
+        if archivo_asignaciones:
+            self.archivo = archivo_asignaciones
+        else:
+            # Intentar usar el archivo del periodo activo
+            self.archivo = self._obtener_archivo_periodo_activo()
+    
+    def _obtener_archivo_periodo_activo(self):
+        """Obtiene la ruta del archivo de asignaciones del periodo activo"""
+        try:
+            from PeriodoAsignacion import GestorPeriodos, PeriodoAsignacion
+            
+            gestor = GestorPeriodos()
+            periodo = gestor.obtener_periodo_activo()
+            
+            if periodo and periodo.archivo_asignaciones:
+                return periodo.archivo_asignaciones
+            
+            # Buscar en periodos disponibles
+            periodos = PeriodoAsignacion.listar_periodos()
+            for p in periodos:
+                if p['estado'] in ['FINALIZADO', 'EN_PROCESO']:
+                    periodo_cargado = PeriodoAsignacion.cargar(p['codigo'])
+                    if periodo_cargado and periodo_cargado.archivo_asignaciones:
+                        return periodo_cargado.archivo_asignaciones
+        except:
+            pass
+        
+        # Fallback
+        return "Asignaciones.xlsx"
     
     def registrar_aceptacion(self, identificacion: str, cus_id: str, fecha_aceptacion: str) -> bool:
         """Registra la aceptación de un cupo (Art. 56)"""
         try:
             df = pd.read_excel(self.archivo)
             
+            # Convertir columnas a string para comparación
+            df['identificacion'] = df['identificacion'].astype(str)
+            if 'cus_id' in df.columns:
+                df['cus_id'] = df['cus_id'].astype(str)
+            
             # Verificar que no tenga otro cupo aceptado (Art. 56)
             cupos_aceptados = df[
-                (df['identificacion'] == identificacion) & 
+                (df['identificacion'] == str(identificacion)) & 
                 (df['estado'] == 'ACEPTADO')
             ]
             
@@ -644,7 +677,11 @@ class GestorAceptacion:
                 return False
             
             # Buscar la asignación
-            mask = (df['identificacion'] == identificacion) & (df['cus_id'] == cus_id)
+            # Si cus_id está vacío o es None, buscar solo por identificación
+            if cus_id and str(cus_id).strip():
+                mask = (df['identificacion'] == str(identificacion)) & (df['cus_id'] == str(cus_id))
+            else:
+                mask = (df['identificacion'] == str(identificacion))
             
             if mask.any():
                 df.loc[mask, 'estado'] = 'ACEPTADO'
@@ -655,13 +692,17 @@ class GestorAceptacion:
             return False
         except Exception as e:
             print(f"Error al registrar aceptación: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def verificar_aceptacion(self, identificacion: str) -> Optional[Dict]:
         """Verifica si un postulante tiene un cupo aceptado"""
         try:
             df = pd.read_excel(self.archivo)
-            asignacion = df[(df['identificacion'] == identificacion) & 
+            # Convertir a string para comparación
+            df['identificacion'] = df['identificacion'].astype(str)
+            asignacion = df[(df['identificacion'] == str(identificacion)) & 
                           (df['estado'] == 'ACEPTADO')]
             
             if not asignacion.empty:

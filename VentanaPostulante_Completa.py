@@ -2,6 +2,7 @@ from Backend_Completo import Postulante, GestorAceptacion
 import tkinter as tk
 from tkinter import messagebox, ttk, scrolledtext
 import pandas as pd
+import os
 from datetime import datetime
 
 class VentanaPostulante:
@@ -63,19 +64,56 @@ class VentanaPostulante:
     def verificar_asignacion(self):
         """Verifica si el postulante tiene un cupo asignado"""
         try:
-            asignaciones = pd.read_excel("Asignaciones.xlsx")
-            resultado = asignaciones[asignaciones['identificacion'] == self.postulante.identificacion]
+            from PeriodoAsignacion import GestorPeriodos, PeriodoAsignacion
             
-            if not resultado.empty:
-                self.postulante.cupo_asignado = True
-                self.postulante.estado_cupo = resultado.iloc[0]['estado']
-                self.postulante.nombre_carrera = resultado.iloc[0]['carrera']
-                self.info_asignacion = resultado.iloc[0].to_dict()
+            # Intentar cargar desde periodo activo primero
+            gestor = GestorPeriodos()
+            periodo = gestor.obtener_periodo_activo()
+            
+            asignaciones = None
+            
+            if periodo and periodo.archivo_asignaciones:
+                archivo = periodo.archivo_asignaciones
+                if os.path.exists(archivo):
+                    asignaciones = pd.read_excel(archivo)
+            
+            # Si no hay periodo activo, buscar en periodos disponibles
+            if asignaciones is None:
+                periodos = PeriodoAsignacion.listar_periodos()
+                for p in periodos:
+                    if p['estado'] in ['FINALIZADO', 'EN_PROCESO']:
+                        periodo_cargado = PeriodoAsignacion.cargar(p['codigo'])
+                        if periodo_cargado and periodo_cargado.archivo_asignaciones:
+                            archivo = periodo_cargado.archivo_asignaciones
+                            if os.path.exists(archivo):
+                                asignaciones = pd.read_excel(archivo)
+                                break
+            
+            # Fallback: archivo en la raíz
+            if asignaciones is None and os.path.exists("Asignaciones.xlsx"):
+                asignaciones = pd.read_excel("Asignaciones.xlsx")
+            
+            if asignaciones is not None:
+                # Convertir ambos a string para la comparación
+                resultado = asignaciones[asignaciones['identificacion'].astype(str) == str(self.postulante.identificacion)]
+                
+                if not resultado.empty:
+                    self.postulante.cupo_asignado = True
+                    self.postulante.estado_cupo = resultado.iloc[0]['estado']
+                    self.postulante.nombre_carrera = resultado.iloc[0]['carrera']
+                    self.postulante.cus_id = str(resultado.iloc[0]['cus_id'])
+                    self.postulante.ofa_id = str(resultado.iloc[0]['ofa_id'])
+                    self.info_asignacion = resultado.iloc[0].to_dict()
+                else:
+                    self.postulante.cupo_asignado = False
+                    self.info_asignacion = None
             else:
                 self.postulante.cupo_asignado = False
                 self.info_asignacion = None
         except Exception as e:
             print(f"Error al verificar asignación: {e}")
+            import traceback
+            traceback.print_exc()
             self.postulante.cupo_asignado = False
             self.info_asignacion = None
     
@@ -300,41 +338,99 @@ class VentanaPostulante:
                 messagebox.showerror("Error", "No se pudo registrar la aceptación")
     
     def cargar_resultados(self):
-        """Carga los resultados en el área de texto"""
-        self.texto_resultados.delete(1.0, tk.END)
+        """Carga los resultados de la asignación"""
+        self.texto_resultados.delete('1.0', tk.END)
         
-        if not self.postulante.cupo_asignado:
-            self.texto_resultados.insert(tk.END, "=== SIN CUPO ASIGNADO ===\n\n")
-            self.texto_resultados.insert(tk.END, "Aún no se han publicado los resultados de asignación.\n")
-            self.texto_resultados.insert(tk.END, "Por favor espera la fecha de publicación de resultados.\n")
-            return
-        
-        self.texto_resultados.insert(tk.END, "=== RESULTADO DE ASIGNACIÓN ===\n\n")
-        self.texto_resultados.insert(tk.END, f"Identificación: {self.postulante.identificacion}\n")
-        self.texto_resultados.insert(tk.END, f"Carrera Asignada: {self.info_asignacion['carrera']}\n")
-        self.texto_resultados.insert(tk.END, f"Puntaje: {self.info_asignacion['puntaje']}\n")
-        self.texto_resultados.insert(tk.END, f"Grupo de Asignación: {self.info_asignacion['grupo']}\n")
-        self.texto_resultados.insert(tk.END, f"Prioridad: {self.info_asignacion['prioridad']}\n")
-        self.texto_resultados.insert(tk.END, f"Fecha de Asignación: {self.info_asignacion['fecha_asignacion']}\n")
-        self.texto_resultados.insert(tk.END, f"Estado: {self.info_asignacion['estado']}\n\n")
-        
-        if self.info_asignacion['estado'] == "ASIGNADO":
-            self.texto_resultados.insert(tk.END, "IMPORTANTE:\n")
-            self.texto_resultados.insert(tk.END, "Debes aceptar tu cupo para confirmar tu participación.\n")
-            self.texto_resultados.insert(tk.END, "Una vez aceptado, no podrás modificar ni renunciar al cupo.\n")
-        else:
-            self.texto_resultados.insert(tk.END, "✓ Cupo aceptado correctamente\n")
-            self.texto_resultados.insert(tk.END, "Pronto recibirás información sobre el proceso de matrícula.\n")
+        try:
+            from PeriodoAsignacion import GestorPeriodos, PeriodoAsignacion
+            
+            # Intentar cargar desde periodo activo primero
+            gestor = GestorPeriodos()
+            periodo = gestor.obtener_periodo_activo()
+            
+            asignaciones = None
+            
+            if periodo and periodo.archivo_asignaciones:
+                archivo = periodo.archivo_asignaciones
+                if os.path.exists(archivo):
+                    asignaciones = pd.read_excel(archivo)
+            
+            # Si no hay periodo activo, buscar en periodos disponibles
+            if asignaciones is None:
+                periodos = PeriodoAsignacion.listar_periodos()
+                for p in periodos:
+                    if p['estado'] in ['FINALIZADO', 'EN_PROCESO']:
+                        periodo_cargado = PeriodoAsignacion.cargar(p['codigo'])
+                        if periodo_cargado and periodo_cargado.archivo_asignaciones:
+                            archivo = periodo_cargado.archivo_asignaciones
+                            if os.path.exists(archivo):
+                                asignaciones = pd.read_excel(archivo)
+                                break
+            
+            # Fallback: archivo en la raíz
+            if asignaciones is None and os.path.exists("Asignaciones.xlsx"):
+                asignaciones = pd.read_excel("Asignaciones.xlsx")
+            
+            if asignaciones is not None:
+                # Convertir ambos a string para la comparación
+                resultado = asignaciones[asignaciones['identificacion'].astype(str) == str(self.postulante.identificacion)]
+                
+                if not resultado.empty:
+                    info = resultado.iloc[0]
+                    texto = f"""
+╔══════════════════════════════════════════════════════════════╗
+║           RESULTADOS DE ASIGNACIÓN - ASIGNAU                ║
+╚══════════════════════════════════════════════════════════════╝
+
+IDENTIFICACIÓN: {info['identificacion']}
+CARRERA ASIGNADA: {info['carrera']}
+PUNTAJE: {info['puntaje']}
+GRUPO: {info['grupo']}
+ESTADO: {info['estado']}
+VUELTA: {info['vuelta']}
+
+{'='*60}
+                    """
+                    self.texto_resultados.insert('1.0', texto)
+                    
+                    # Actualizar el estado del postulante después de cargar resultados
+                    self.postulante.cupo_asignado = True
+                    self.postulante.estado_cupo = info['estado']
+                    self.postulante.nombre_carrera = info['carrera']
+                else:
+                    self.texto_resultados.insert('1.0', 
+                        "No se encontraron resultados de asignación para tu identificación.\n"
+                        "Por favor verifica que el proceso de asignación haya finalizado.")
+            else:
+                self.texto_resultados.insert('1.0', 
+                    "Aún no se han generado resultados de asignación.\n"
+                    "Por favor espera a que el administrador ejecute el proceso.")
+        except FileNotFoundError:
+            self.texto_resultados.insert('1.0', 
+                "Aún no se han generado resultados de asignación.\n"
+                "Por favor espera a que el administrador ejecute el proceso.")
+        except Exception as e:
+            self.texto_resultados.insert('1.0', 
+                f"Error al cargar resultados: {e}")
+            import traceback
+            traceback.print_exc()
     
     def actualizar_postulaciones(self):
         """Actualiza la información de postulaciones"""
+        # Verificar si hay nuevas asignaciones
         self.verificar_asignacion()
-        messagebox.showinfo("Actualizado", "Información actualizada correctamente")
-        # Recrear la pestaña de inicio
-        self.notebook.destroy()
-        self.notebook = ttk.Notebook(self.ventana)
-        self.notebook.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
         
+        # Actualizar la carga de resultados
+        self.cargar_resultados()
+        
+        # Mostrar mensaje
+        messagebox.showinfo("Actualizado", "Información actualizada correctamente")
+        
+        # Recrear pestañas para reflejar cambios
+        for widget in self.notebook.winfo_children():
+            widget.destroy()
+        
+        # Recrear todas las pestañas
         self.crear_pestana_inicio()
         self.crear_pestana_postulaciones()
         self.crear_pestana_resultados()

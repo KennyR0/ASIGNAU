@@ -47,6 +47,27 @@ class BD_ADMIN(Base_Dato):
 
 class BD_USUARIO(Base_Dato):
     def cargar_base(self):
+        # Intentar cargar desde el periodo activo primero
+        gestor = GestorPeriodos()
+        periodo = gestor.obtener_periodo_activo()
+        
+        if periodo and periodo.archivo_postulantes:
+            excel = periodo.archivo_postulantes
+            if os.path.exists(excel):
+                base = pd.read_excel(excel, sheet_name=5, skiprows=1)
+                return base
+        
+        # Si no hay periodo activo, buscar en el último periodo disponible
+        periodos = PeriodoAsignacion.listar_periodos()
+        for p in periodos:
+            if p['estado'] != 'CERRADO':
+                periodo_cargado = PeriodoAsignacion.cargar(p['codigo'])
+                if periodo_cargado and periodo_cargado.archivo_postulantes:
+                    excel = periodo_cargado.archivo_postulantes
+                    if os.path.exists(excel):
+                        base = pd.read_excel(excel, sheet_name=5, skiprows=1)
+                        return base
+        
         excel = "Postulantes.xlsx"
         if os.path.exists(excel):
             base = pd.read_excel(excel, sheet_name=5, skiprows=1)
@@ -72,6 +93,16 @@ class BD_POSTULACIONES:
     
     @staticmethod
     def cargar_postulaciones():
+        # Intentar cargar desde el periodo activo primero
+        gestor = GestorPeriodos()
+        periodo = gestor.obtener_periodo_activo()
+        
+        if periodo and periodo.archivo_postulantes:
+            excel = periodo.archivo_postulantes
+            if os.path.exists(excel):
+                return pd.read_excel(excel, sheet_name=5, skiprows=1)
+        
+        # Fallback: archivo en la raíz
         excel = "Postulantes.xlsx"
         if os.path.exists(excel):
             return pd.read_excel(excel, sheet_name=5, skiprows=1)
@@ -79,9 +110,47 @@ class BD_POSTULACIONES:
     
     @staticmethod
     def cargar_oferta_academica():
+        # Intentar cargar desde el periodo activo primero
+        gestor = GestorPeriodos()
+        periodo = gestor.obtener_periodo_activo()
+        
+        if periodo and periodo.archivo_oferta:
+            excel = periodo.archivo_oferta
+            if os.path.exists(excel):
+                return pd.read_excel(excel, sheet_name=0, skiprows=1)
+        
+        # Fallback: archivo en la raíz
         excel = "Oferta_Academica.xlsx"
         if os.path.exists(excel):
             return pd.read_excel(excel, sheet_name=0, skiprows=1)
+        return None
+    
+    @staticmethod
+    def cargar_asignaciones():
+        """Carga las asignaciones del periodo activo"""
+        # Intentar cargar desde el periodo activo primero
+        gestor = GestorPeriodos()
+        periodo = gestor.obtener_periodo_activo()
+        
+        if periodo and periodo.archivo_asignaciones:
+            excel = periodo.archivo_asignaciones
+            if os.path.exists(excel):
+                return pd.read_excel(excel)
+        
+        # Buscar en periodos disponibles
+        periodos = PeriodoAsignacion.listar_periodos()
+        for p in periodos:
+            if p['estado'] in ['FINALIZADO', 'EN_PROCESO']:
+                periodo_cargado = PeriodoAsignacion.cargar(p['codigo'])
+                if periodo_cargado and periodo_cargado.archivo_asignaciones:
+                    excel = periodo_cargado.archivo_asignaciones
+                    if os.path.exists(excel):
+                        return pd.read_excel(excel)
+        
+        # Fallback: archivo en la raíz
+        excel = "Asignaciones.xlsx"
+        if os.path.exists(excel):
+            return pd.read_excel(excel)
         return None
     
     @staticmethod
