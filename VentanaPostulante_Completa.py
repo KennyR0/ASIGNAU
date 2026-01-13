@@ -1,4 +1,5 @@
-from Backend_Completo import Postulante, GestorAceptacion
+from Backend_Completo import Postulante
+from Asignacion import GestorAceptacion
 import tkinter as tk
 from tkinter import messagebox, ttk, scrolledtext
 import pandas as pd

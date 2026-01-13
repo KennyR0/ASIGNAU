@@ -1,34 +1,49 @@
 import pandas as pd
 from typing import Optional, Dict, List, Set
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+import os
 
+# IMPORTAR CLASES DESDE MÓDULOS ESPECIALIZADOS
 
-#ENUMERACIONES DE ASIGNACIÓN
-class GrupoAsignacion(Enum):
-    """Orden de asignación"""
-    POLITICA_CUOTAS = 1           # 5-10% de la oferta
-    VULNERABILIDAD = 2             # Al menos 10%
-    MERITO_ACADEMICO = 3           # Al menos 20%
-    OTROS_RECONOCIMIENTOS = 4      # Máximo 2%
-    BACHILLERES_PUEBLOS = 5        # Máximo 10%
-    BACHILLERES_ULTIMO_ANIO = 6    # Al menos 20%
-    POBLACION_GENERAL = 7          # Al menos 20%
+# Estrategias (Strategy Pattern)
+from Estrategias import (
+    GrupoAsignacion,
+    EstrategiaClasificacion,
+    EstrategiaDesempate, 
+    EstrategiaSegmentacion,
+    ClasificacionSENESCYT,
+    DesempateSENESCYT,
+    SegmentacionPorcentual,
+    SegmentacionInstitutos
+)
 
+# Observadores (Observer Pattern)
+from Observadores import ObservadorAsignacion
+
+# Reportes
+from Reportes import Reporte
+# ENUMERACIÓN DE ESTADO DE CUPO
 
 class EstadoCupo(Enum):
+    """Estados posibles de un cupo"""
     DISPONIBLE = "DISPONIBLE"
     ASIGNADO = "ASIGNADO"
     ACEPTADO = "ACEPTADO"
     LIBERADO = "LIBERADO"
 
 
-#CLASE CUPO 
+# 
+# CLASE CUPO (Dataclass)
+# 
+
 @dataclass
 class Cupo:
-    """Representa un cupo disponible en una carrera"""
+    """
+    Representa un cupo disponible en una carrera.
+    Usa @dataclass para reducir boilerplate.
+    """
     id_cupo: str
     ofa_id: str
     cus_id: str
@@ -38,7 +53,7 @@ class Cupo:
     estado: EstadoCupo = EstadoCupo.DISPONIBLE
     postulante_asignado: Optional[str] = None
     
-    def asignar(self, identificacion_postulante: str):
+    def asignar(self, identificacion_postulante: str) -> bool:
         """Asigna el cupo a un postulante"""
         if self.estado == EstadoCupo.DISPONIBLE:
             self.estado = EstadoCupo.ASIGNADO
@@ -46,27 +61,29 @@ class Cupo:
             return True
         return False
     
-    def liberar(self):
+    def liberar(self) -> None:
         """Libera el cupo"""
         self.estado = EstadoCupo.DISPONIBLE
         self.postulante_asignado = None
     
-    def aceptar(self):
+    def aceptar(self) -> bool:
         """Marca el cupo como aceptado"""
         if self.estado == EstadoCupo.ASIGNADO:
             self.estado = EstadoCupo.ACEPTADO
             return True
         return False
     
-    def esta_disponible(self):
+    def esta_disponible(self) -> bool:
+        """Verifica si el cupo está disponible"""
         return self.estado == EstadoCupo.DISPONIBLE
 
 
-#  MOTOR DE ASIGNACIÓN 
+
+# MOTOR DE ASIGNACIÓN (Strategy + Observer + Dependency Inversion)
 class MotorAsignacion:
     """
-    Crea los distintos posibles grupos de asignación y gestiona
-    el proceso de asignación de cupos a los postulantes 
+    Motor de asignación de cupos    
+
     """
     
     # Porcentajes según Artículo 52 (para IES públicas)
@@ -92,10 +109,29 @@ class MotorAsignacion:
     }
     
     def __init__(self, oferta_df: pd.DataFrame, postulaciones_df: pd.DataFrame, 
-                 porcentajes: Dict[str, float] = None, es_instituto: bool = False):
+                 porcentajes: Dict[str, float] = None, es_instituto: bool = False,
+                 estrategia_clasificacion: EstrategiaClasificacion = None,
+                 estrategia_desempate: EstrategiaDesempate = None,
+                 estrategia_segmentacion: EstrategiaSegmentacion = None,
+                 observador: ObservadorAsignacion = None):
+        """
+        Constructor con Inyección de Dependencias .
+        """
         self.oferta_df = oferta_df
-        self.postulaciones_df = postulaciones_df
+        self.postulaciones_df = self._normalizar_columnas(postulaciones_df)
         self.es_instituto = es_instituto
+        
+        # INYECCIÓN DE ESTRATEGIAS (Strategy + DIP) 
+        self._estrategia_clasificacion = estrategia_clasificacion or ClasificacionSENESCYT()
+        self._estrategia_desempate = estrategia_desempate or DesempateSENESCYT()
+        self._estrategia_segmentacion = estrategia_segmentacion or (
+            SegmentacionInstitutos() if es_instituto else SegmentacionPorcentual()
+        )
+        
+        #OBSERVER PATTERN 
+        self._observadores: List[ObservadorAsignacion] = []
+        if observador:
+            self._observadores.append(observador)
         
         # Usar porcentajes proporcionados o los predeterminados
         if porcentajes:
@@ -124,6 +160,80 @@ class MotorAsignacion:
         self.postulantes_asignados: Set[str] = set()
         self.bachilleres_participaron: Set[str] = set()  # Art. 52 numeral 5
         self.postulantes_por_grupo: Dict[str, List[GrupoAsignacion]] = {}
+    
+    #MÉTODOS PARA CAMBIAR ESTRATEGIAS EN RUNTIME
+    
+    def set_estrategia_clasificacion(self, estrategia: EstrategiaClasificacion):
+        """Permite cambiar la estrategia de clasificación en tiempo de ejecución (OCP)"""
+        self._estrategia_clasificacion = estrategia
+    
+    def set_estrategia_desempate(self, estrategia: EstrategiaDesempate):
+        """Permite cambiar la estrategia de desempate en tiempo de ejecución (OCP)"""
+        self._estrategia_desempate = estrategia
+    
+    def set_estrategia_segmentacion(self, estrategia: EstrategiaSegmentacion):
+        """Permite cambiar la estrategia de segmentación en tiempo de ejecución (OCP)"""
+        self._estrategia_segmentacion = estrategia
+    
+    #MÉTODOS DEL PATRÓN OBSERVER 
+    
+    def agregar_observador(self, observador: ObservadorAsignacion):
+        """Agrega un observador para recibir notificaciones (Observer Pattern)"""
+        if observador not in self._observadores:
+            self._observadores.append(observador)
+    
+    def remover_observador(self, observador: ObservadorAsignacion):
+        """Remueve un observador de la lista"""
+        if observador in self._observadores:
+            self._observadores.remove(observador)
+    
+    def _notificar_inicio(self, total_carreras: int, total_postulantes: int):
+        """Notifica a todos los observadores el inicio de la asignación"""
+        for obs in self._observadores:
+            obs.on_inicio_asignacion(total_carreras, total_postulantes)
+    
+    def _notificar_grupo(self, grupo: GrupoAsignacion, asignados: int, restantes: int):
+        """Notifica a todos los observadores que se procesó un grupo"""
+        for obs in self._observadores:
+            obs.on_grupo_procesado(grupo, asignados, restantes)
+    
+    def _notificar_completado(self, total_asignados: int, estadisticas: Dict):
+        """Notifica a todos los observadores que la asignación terminó"""
+        for obs in self._observadores:
+            obs.on_asignacion_completada(total_asignados, estadisticas)
+    
+    def _notificar_error(self, mensaje: str):
+        """Notifica a todos los observadores de un error"""
+        for obs in self._observadores:
+            obs.on_error(mensaje)
+    
+    #MÉTODOS AUXILIARES 
+    
+    def _normalizar_columnas(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Normaliza los nombres de columnas para evitar errores por tildes o variaciones.
+        """
+        if df is None or df.empty:
+            return df
+        
+        # Mapeo de variantes a nombre estándar
+        columnas_mapa = {}
+        for col in df.columns:
+            col_upper = str(col).upper()
+            # Buscar coincidencias
+            if 'IDENTIFICACI' in col_upper and 'IDENTIFICACIÓN' not in df.columns:
+                columnas_mapa[col] = 'IDENTIFICACIÓN'
+            elif 'PUNTAJE' in col_upper and 'PUNTAJE_POSTULACION' not in df.columns:
+                columnas_mapa[col] = 'PUNTAJE_POSTULACION'
+            elif 'PRIORIDAD' in col_upper and 'PRIORIDAD_ELECCION_CARRERA' not in df.columns:
+                columnas_mapa[col] = 'PRIORIDAD_ELECCION_CARRERA'
+            elif (col_upper == 'CUS_ID' or col_upper == 'CUS') and 'CUS_ID' not in df.columns:
+                columnas_mapa[col] = 'CUS_ID'
+        
+        if columnas_mapa:
+            df = df.rename(columns=columnas_mapa)
+        
+        return df
     
     def validar_porcentajes(self) -> bool:
         """
@@ -174,27 +284,26 @@ class MotorAsignacion:
         return len(errores) == 0
     
     def segmentar_oferta(self):
-        """Segmenta la oferta de cupos según los porcentajes establecidos"""
-        for _, oferta in self.oferta_df.iterrows():
+        """
+        Segmenta la oferta de cupos según la estrategia de segmentación configurada.
+        Utiliza el patrón Strategy para permitir diferentes formas de segmentación.
+        """
+        # IMPORTANTE: Agrupar por CUS_ID primero para evitar sobrescrituras
+        # si hay múltiples filas por carrera
+        oferta_agrupada = self.oferta_df.groupby('CUS_ID').agg({
+            'OFA_ID': 'first',
+            'CAR_NOMBRE_CARRERA': 'first',
+            'CUS_TOTAL_CUPOS': 'sum'  # SUMA los cupos si hay múltiples registros
+        }).reset_index()
+        
+        for _, oferta in oferta_agrupada.iterrows():
             ofa_id = str(oferta.get('OFA_ID', ''))
             cus_id = str(oferta.get('CUS_ID', ''))
             carrera = str(oferta.get('CAR_NOMBRE_CARRERA', ''))
             total_cupos = int(oferta.get('CUS_TOTAL_CUPOS', 0))
             
-            cupos_segmentados = {
-                GrupoAsignacion.POLITICA_CUOTAS: int(total_cupos * self.porcentajes['politica_cuotas']),
-                GrupoAsignacion.VULNERABILIDAD: int(total_cupos * self.porcentajes['vulnerabilidad']),
-                GrupoAsignacion.MERITO_ACADEMICO: int(total_cupos * self.porcentajes['merito_academico']),
-                GrupoAsignacion.OTROS_RECONOCIMIENTOS: int(total_cupos * self.porcentajes['otros_reconocimientos']),
-                GrupoAsignacion.BACHILLERES_PUEBLOS: int(total_cupos * self.porcentajes['bachilleres_pueblos']),
-                GrupoAsignacion.BACHILLERES_ULTIMO_ANIO: int(total_cupos * self.porcentajes['bachilleres_ultimo']),
-                GrupoAsignacion.POBLACION_GENERAL: int(total_cupos * self.porcentajes['poblacion_general'])
-            }
-            
-            # Ajustar cupos restantes a población general
-            cupos_asignados = sum(cupos_segmentados.values())
-            if cupos_asignados < total_cupos:
-                cupos_segmentados[GrupoAsignacion.POBLACION_GENERAL] += (total_cupos - cupos_asignados)
+            # USAR ESTRATEGIA DE SEGMENTACIÓN (Strategy Pattern)
+            cupos_segmentados = self._estrategia_segmentacion.segmentar(total_cupos, self.porcentajes)
             
             self.cupos_por_carrera[cus_id] = cupos_segmentados.copy()
             self.cupos_originales_por_carrera[cus_id] = cupos_segmentados.copy()
@@ -203,50 +312,11 @@ class MotorAsignacion:
     
     def clasificar_postulante(self, postulante: Dict) -> List[GrupoAsignacion]:
         """
-        Clasifica al postulante en los grupos a los que pertenece.
-        Según Art. 52: participa inicialmente en el grupo que más le favorece.
-        Si no obtiene cupo, será reasignado a los siguientes grupos.
+        Clasifica al postulante usando la estrategia de clasificación configurada.
+        Utiliza el patrón Strategy para permitir diferentes criterios de clasificación.
         """
-        grupos = []
-        identificacion = str(postulante.get('IDENTIFICACIÓN', ''))
-        
-        # Art. 52: Si tiene título de tercer nivel, solo población general
-        if postulante.get('TIENE_TITULO_TERCER_NIVEL') == 'SI':
-            return [GrupoAsignacion.POBLACION_GENERAL]
-        
-        # 1. Política de cuotas (grupos históricamente excluidos)
-        if postulante.get('SEGMENTO_ASPIRANTE') == 2:
-            grupos.append(GrupoAsignacion.POLITICA_CUOTAS)
-        
-        # 2. Vulnerabilidad socioeconómica
-        if postulante.get('VULNERABILIDAD_SOCIOECONOMICA') == 'SI':
-            grupos.append(GrupoAsignacion.VULNERABILIDAD)
-        
-        # 3. Mérito académico (cuadro de honor)
-        if postulante.get('CUADRO_HONOR') == 'SI' or postulante.get('MERITO_ACADEMICO') == 'SI':
-            grupos.append(GrupoAsignacion.MERITO_ACADEMICO)
-        
-        # 4. Otros reconocimientos al mérito
-        if postulante.get('OTROS_RECONOCIMIENTOS') == 'SI':
-            grupos.append(GrupoAsignacion.OTROS_RECONOCIMIENTOS)
-        
-        # 5. Bachilleres del último régimen escolar
-        # Art. 52 numeral 5: Bachilleres participan una sola vez en su grupo
-        es_bachiller_ultimo = postulante.get('BACHILLER_ULTIMO_ANIO') == 'SI'
-        es_pueblos_nacionalidades = postulante.get('PUEBLOS_NACIONALIDADES') == 'SI'
-        
-        if es_bachiller_ultimo and identificacion not in self.bachilleres_participaron:
-            # Art. 52.5a: La asignación inicia por pueblos y nacionalidades
-            if es_pueblos_nacionalidades:
-                grupos.append(GrupoAsignacion.BACHILLERES_PUEBLOS)
-            # Art. 52.5b: Continúa con los demás bachilleres
-            # Todos los bachilleres del último año participan en este grupo
-            grupos.append(GrupoAsignacion.BACHILLERES_ULTIMO_ANIO)
-        
-        # 6. Siempre puede participar en población general
-        grupos.append(GrupoAsignacion.POBLACION_GENERAL)
-        
-        return grupos
+        # USAR ESTRATEGIA DE CLASIFICACIÓN (Strategy Pattern)
+        return self._estrategia_clasificacion.clasificar(postulante, self.bachilleres_participaron)
     
     def obtener_grupo_mas_favorable(self, grupos: List[GrupoAsignacion]) -> GrupoAsignacion:
         """
@@ -259,29 +329,23 @@ class MotorAsignacion:
     
     def resolver_empate(self, postulantes: pd.DataFrame) -> pd.DataFrame:
         """
-        Resuelve empates según Artículo 54:
-        1. Índice de vulnerabilidad (menor a mayor)
-        2. Fecha de inscripción (más antigua a más reciente)
+        Resuelve empates usando la estrategia de desempate configurada.
+        Utiliza el patrón Strategy para permitir diferentes criterios de ordenamiento.
         """
-        # Ordenar por puntaje (desc), luego vulnerabilidad (asc), luego fecha (asc)
-        columnas_orden = ['PUNTAJE_POSTULACION']
-        orden_asc = [False]
-        
-        if 'INDICE_VULNERABILIDAD' in postulantes.columns:
-            columnas_orden.append('INDICE_VULNERABILIDAD')
-            orden_asc.append(True)  # Menor vulnerabilidad primero
-        
-        if 'FECHA_INSCRIPCION' in postulantes.columns:
-            columnas_orden.append('FECHA_INSCRIPCION')
-            orden_asc.append(True)  # Más antigua primero
-        elif 'FECHA_POSTULACION' in postulantes.columns:
-            columnas_orden.append('FECHA_POSTULACION')
-            orden_asc.append(True)
-        
-        return postulantes.sort_values(columnas_orden, ascending=orden_asc)
+        # USAR ESTRATEGIA DE DESEMPATE (Strategy Pattern)
+        return self._estrategia_desempate.resolver(postulantes)
     
     def obtener_postulantes_grupo(self, grupo: GrupoAsignacion) -> pd.DataFrame:
         """Obtiene los postulantes que pertenecen a un grupo específico"""
+                # VALIDACIÓN: Verificar que tenemos los datos necesarios
+        if self.postulaciones_df.empty:
+            print("⚠️  ERROR: DataFrame de postulaciones está vacío")
+            return pd.DataFrame()
+        
+        if 'IDENTIFICACIÓN' not in self.postulaciones_df.columns:
+            print(f"⚠️  ERROR: Columna 'IDENTIFICACIÓN' no encontrada")
+            print(f"Columnas disponibles: {list(self.postulaciones_df.columns)}")
+            return pd.DataFrame()
         postulantes_grupo = []
         
         for _, postulante in self.postulaciones_df.iterrows():
@@ -314,7 +378,14 @@ class MotorAsignacion:
         """Asigna cupos a los postulantes de un grupo específico"""
         postulantes_df = self.obtener_postulantes_grupo(grupo)
         
+        # Si no hay postulantes para este grupo, salir (es normal)
         if postulantes_df.empty:
+            return
+        
+        # Validar que tenemos la columna IDENTIFICACIÓN
+        if 'IDENTIFICACIÓN' not in postulantes_df.columns:
+            print(f"⚠️  ERROR en asignar_por_grupo ({grupo.name}): Columna IDENTIFICACIÓN no encontrada")
+            print(f"   Columnas disponibles: {list(postulantes_df.columns)[:5]}...")
             return
         
         # Ordenar por puntaje y resolver empates
@@ -337,37 +408,48 @@ class MotorAsignacion:
             for _, postulacion in postulaciones_postulante.iterrows():
                 cus_id = str(postulacion['CUS_ID'])
                 
+                # VALIDACIÓN CRÍTICA: Verificar que el CUS_ID existe en cupos_por_carrera
                 if cus_id not in self.cupos_por_carrera:
                     continue
                 
-                # Verificar si hay cupos disponibles en este grupo
-                if self.cupos_por_carrera[cus_id].get(grupo, 0) > 0:
-                    ofa_id = self.ofa_id_por_carrera.get(cus_id, str(postulacion.get('OFA_ID', '')))
-                    carrera = self.carrera_por_cus.get(cus_id, str(postulacion.get('NOMBRE_CARRERA', '')))
-                    
-                    # Registrar asignación
-                    self.asignaciones.append({
-                        'identificacion': identificacion,
-                        'cus_id': cus_id,
-                        'ofa_id': ofa_id,
-                        'carrera': carrera,
-                        'puntaje': float(postulante['PUNTAJE_POSTULACION']),
-                        'grupo': grupo.name,
-                        'prioridad': int(postulacion['PRIORIDAD_ELECCION_CARRERA']),
-                        'fecha_asignacion': datetime.now().strftime("%d/%m/%Y %H:%M"),
-                        'estado': 'ASIGNADO'
-                    })
-                    
-                    # Actualizar estado
-                    self.cupos_por_carrera[cus_id][grupo] -= 1
-                    self.postulantes_asignados.add(identificacion)
-                    
-                    # Marcar bachiller como participado (Art. 52 numeral 5)
-                    if grupo in [GrupoAsignacion.BACHILLERES_PUEBLOS, GrupoAsignacion.BACHILLERES_ULTIMO_ANIO]:
-                        self.bachilleres_participaron.add(identificacion)
-                    
-                    asignado = True
-                    break
+                # VALIDACIÓN CRÍTICA: Verificar que hay cupos disponibles en ESTE grupo específico
+                cupos_disponibles = self.cupos_por_carrera[cus_id].get(grupo, 0)
+                if cupos_disponibles <= 0:
+                    # No hay cupos en este grupo, continuar con la siguiente carrera
+                    continue
+                
+                # VALIDACIÓN: Asegurar que no sobrepasamos los cupos totales
+                total_cupos_carrera = sum(self.cupos_por_carrera[cus_id].values())
+                if total_cupos_carrera <= 0:
+                    # No hay cupos disponibles en esta carrera (total)
+                    continue
+                
+                ofa_id = self.ofa_id_por_carrera.get(cus_id, str(postulacion.get('OFA_ID', '')))
+                carrera = self.carrera_por_cus.get(cus_id, str(postulacion.get('NOMBRE_CARRERA', '')))
+                
+                # Registrar asignación
+                self.asignaciones.append({
+                    'identificacion': identificacion,
+                    'cus_id': cus_id,
+                    'ofa_id': ofa_id,
+                    'carrera': carrera,
+                    'puntaje': float(postulante['PUNTAJE_POSTULACION']),
+                    'grupo': grupo.name,
+                    'prioridad': int(postulacion['PRIORIDAD_ELECCION_CARRERA']),
+                    'fecha_asignacion': datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    'estado': 'ASIGNADO'
+                })
+                
+                # Actualizar estado - CRÍTICO: Descontar del grupo específico
+                self.cupos_por_carrera[cus_id][grupo] -= 1
+                self.postulantes_asignados.add(identificacion)
+                
+                # Marcar bachiller como participado (Art. 52 numeral 5)
+                if grupo in [GrupoAsignacion.BACHILLERES_PUEBLOS, GrupoAsignacion.BACHILLERES_ULTIMO_ANIO]:
+                    self.bachilleres_participaron.add(identificacion)
+                
+                asignado = True
+                break
             
             # Si no se asignó, el postulante participará en el siguiente grupo
             if not asignado:
@@ -396,6 +478,69 @@ class MotorAsignacion:
             if cupos_liberados > 0:
                 self.cupos_por_carrera[cus_id][GrupoAsignacion.POBLACION_GENERAL] += cupos_liberados
     
+    def _asignar_restantes_a_cupos_disponibles(self):
+        """
+        Asigna postulantes que aún no tienen cupo a cualquier carrera que tenga cupos disponibles.
+        Esto asegura que se llenen todos los cupos posibles.
+        """
+        # Obtener postulantes sin asignación, ordenados por puntaje
+        postulantes_sin_asignar = self.postulaciones_df[
+            ~self.postulaciones_df['IDENTIFICACIÓN'].astype(str).isin(self.postulantes_asignados)
+        ].copy()
+        
+        if postulantes_sin_asignar.empty:
+            return
+        
+        # Ordenar por puntaje descendente
+        if 'PUNTAJE_POSTULACION' in postulantes_sin_asignar.columns:
+            postulantes_sin_asignar = postulantes_sin_asignar.sort_values(
+                'PUNTAJE_POSTULACION', ascending=False
+            )
+        
+        for _, postulante in postulantes_sin_asignar.iterrows():
+            identificacion = str(postulante['IDENTIFICACIÓN'])
+            
+            if identificacion in self.postulantes_asignados:
+                continue
+            
+            # Obtener postulaciones de este postulante ordenadas por prioridad
+            postulaciones_postulante = self.postulaciones_df[
+                self.postulaciones_df['IDENTIFICACIÓN'].astype(str) == identificacion
+            ]
+            
+            if 'PRIORIDAD_ELECCION_CARRERA' in postulaciones_postulante.columns:
+                postulaciones_postulante = postulaciones_postulante.sort_values('PRIORIDAD_ELECCION_CARRERA')
+            
+            # Intentar asignar a cualquier carrera con cupos
+            for _, postulacion in postulaciones_postulante.iterrows():
+                cus_id = str(postulacion['CUS_ID'])
+                
+                if cus_id not in self.cupos_por_carrera:
+                    continue
+                
+                # Verificar cupos disponibles en población general
+                cupos_disponibles = self.cupos_por_carrera[cus_id].get(GrupoAsignacion.POBLACION_GENERAL, 0)
+                
+                if cupos_disponibles > 0:
+                    ofa_id = self.ofa_id_por_carrera.get(cus_id, str(postulacion.get('OFA_ID', '')))
+                    carrera = self.carrera_por_cus.get(cus_id, str(postulacion.get('NOMBRE_CARRERA', '')))
+                    
+                    self.asignaciones.append({
+                        'identificacion': identificacion,
+                        'cus_id': cus_id,
+                        'ofa_id': ofa_id,
+                        'carrera': carrera,
+                        'puntaje': float(postulante['PUNTAJE_POSTULACION']),
+                        'grupo': GrupoAsignacion.POBLACION_GENERAL.name,
+                        'prioridad': int(postulacion.get('PRIORIDAD_ELECCION_CARRERA', 1)),
+                        'fecha_asignacion': datetime.now().strftime("%d/%m/%Y %H:%M"),
+                        'estado': 'ASIGNADO'
+                    })
+                    
+                    self.cupos_por_carrera[cus_id][GrupoAsignacion.POBLACION_GENERAL] -= 1
+                    self.postulantes_asignados.add(identificacion)
+                    break
+    
     def ejecutar_asignacion(self) -> pd.DataFrame:
         """
         Ejecuta el proceso completo de asignación siguiendo el orden
@@ -406,7 +551,8 @@ class MotorAsignacion:
         2. Asignar por grupos en orden (1-6)
         3. Liberar cupos no usados a población general
         4. Asignar población general
-        5. Retornar resultados
+        5. Validar que no se asignaron más que los disponibles
+        6. Retornar resultados
         """
         # Validar porcentajes
         self.validar_porcentajes()
@@ -434,8 +580,64 @@ class MotorAsignacion:
         # 5. Asignar población general (incluye cupos liberados)
         self.asignar_por_grupo(GrupoAsignacion.POBLACION_GENERAL)
         
-        # 6. Retornar DataFrame con asignaciones
+        # 5.1 SEGUNDA PASADA: Intentar asignar postulantes restantes a cualquier carrera con cupos
+        # Esto cubre el caso donde un postulante no obtuvo su primera opción
+        self._asignar_restantes_a_cupos_disponibles()
+        
+        # 6. VALIDACIÓN CRÍTICA: Verificar que no se asignaron más cupos que disponibles
+        df_asignaciones = pd.DataFrame(self.asignaciones)
+        
+        # Calcular total de cupos disponibles
+        total_cupos_ofertados = sum(
+            sum(cupos.values()) 
+            for cupos in self.cupos_originales_por_carrera.values()
+        )
+        
+        total_asignados = len(df_asignaciones)
+        
+        if total_asignados > total_cupos_ofertados:
+            print(f"\n  ALERTA DE VALIDACIÓN:")
+            print(f"   Total cupos ofertados: {total_cupos_ofertados}")
+            print(f"   Total asignados: {total_asignados}")
+            print(f"   EXCESO: {total_asignados - total_cupos_ofertados}")
+            print(f"\n   Se aplicará corrección...")
+            
+            # Aplicar corrección: eliminar asignaciones excedentes
+            # Priorizamos mantener asignaciones de grupos con menores cupos (más selectivos)
+            df_asignaciones = self._corregir_asignaciones_excedentes(df_asignaciones, total_cupos_ofertados)
+            self.asignaciones = df_asignaciones.to_dict('records')
+        
+        # 7. Retornar DataFrame con asignaciones
         return pd.DataFrame(self.asignaciones)
+    
+    def _corregir_asignaciones_excedentes(self, df_asignaciones: pd.DataFrame, total_cupos_permitidos: int) -> pd.DataFrame:
+        """
+        Corrige las asignaciones eliminando las excedentes de forma controlada.
+        Mantiene las asignaciones más antiguas (o de grupos prioritarios) y elimina las más nuevas.
+        """
+        # Agrupamos por carrera y verificamos excesos
+        excedentes_por_carrera = []
+        
+        for cus_id in self.cupos_originales_por_carrera.keys():
+            cus_id_str = str(cus_id)
+            df_carrera = df_asignaciones[df_asignaciones['cus_id'] == cus_id_str]
+            cupos_disponibles = sum(self.cupos_originales_por_carrera[cus_id].values())
+            
+            if len(df_carrera) > cupos_disponibles:
+                # Hay exceso en esta carrera
+                exceso = len(df_carrera) - cupos_disponibles
+                
+                # Mantener solo los primeros (más antiguos/prioritarios)
+                indices_a_eliminar = df_carrera.index[cupos_disponibles:]
+                excedentes_por_carrera.extend(indices_a_eliminar.tolist())
+        
+        # Eliminar las asignaciones excedentes
+        df_corregido = df_asignaciones.drop(excedentes_por_carrera)
+        
+        print(f"   Asignaciones eliminadas: {len(excedentes_por_carrera)}")
+        print(f"   Asignaciones finales: {len(df_corregido)}")
+        
+        return df_corregido
     
     def obtener_estadisticas(self) -> Dict:
         """Retorna estadísticas del proceso de asignación"""
@@ -444,10 +646,18 @@ class MotorAsignacion:
         if df.empty:
             return {'total_asignados': 0}
         
+        # Calcular total de cupos disponibles
+        total_cupos_ofertados = sum(
+            sum(cupos.values()) 
+            for cupos in self.cupos_originales_por_carrera.values()
+        )
+        
         return {
             'total_asignados': len(df),
-            'por_grupo': df['grupo'].value_counts().to_dict(),
-            'por_carrera': df['carrera'].value_counts().to_dict(),
+            'total_cupos_ofertados': total_cupos_ofertados,
+            'diferencia': total_cupos_ofertados - len(df),
+            'por_grupo': df['grupo'].value_counts().to_dict() if not df.empty else {},
+            'por_carrera': df['carrera'].value_counts().to_dict() if not df.empty else {},
             'cupos_restantes': {
                 cus_id: sum(cupos.values()) 
                 for cus_id, cupos in self.cupos_por_carrera.items()
@@ -455,171 +665,7 @@ class MotorAsignacion:
         }
 
 
-#  CLASE REPORTE 
-class Reporte:
-    """Genera reportes del proceso de asignación en formato Excel"""
-    
-    def __init__(self, carpeta_reportes: str = "Reportes"):
-        self.carpeta_reportes = carpeta_reportes
-        if not os.path.exists(carpeta_reportes):
-            os.makedirs(carpeta_reportes)
-    
-    def generar_reporte_completo(self, asignaciones_df: pd.DataFrame, guardar_excel: bool = True) -> Dict:
-        """Genera un reporte completo con estadísticas y lo guarda en Excel"""
-        if asignaciones_df.empty:
-            return {'error': 'No hay asignaciones para generar reporte'}
-        
-        reporte = {
-            'total_asignaciones': len(asignaciones_df),
-            'por_grupo': asignaciones_df['grupo'].value_counts().to_dict(),
-            'por_carrera': asignaciones_df['carrera'].value_counts().to_dict(),
-            'puntaje_promedio': asignaciones_df['puntaje'].mean(),
-            'puntaje_maximo': asignaciones_df['puntaje'].max(),
-            'puntaje_minimo': asignaciones_df['puntaje'].min()
-        }
-        
-        if guardar_excel:
-            fecha_hora = datetime.now().strftime("%Y%m%d_%H%M%S")
-            archivo = os.path.join(self.carpeta_reportes, f"Reporte_General_{fecha_hora}.xlsx")
-            
-            with pd.ExcelWriter(archivo, engine='openpyxl') as writer:
-                # Hoja 1: Resumen general
-                resumen_data = {
-                    'Métrica': ['Total Asignaciones', 'Puntaje Promedio', 'Puntaje Máximo', 'Puntaje Mínimo'],
-                    'Valor': [reporte['total_asignaciones'], 
-                             round(reporte['puntaje_promedio'], 2),
-                             reporte['puntaje_maximo'], 
-                             reporte['puntaje_minimo']]
-                }
-                pd.DataFrame(resumen_data).to_excel(writer, sheet_name='Resumen', index=False)
-                
-                # Hoja 2: Asignaciones por grupo
-                df_grupos = pd.DataFrame(list(reporte['por_grupo'].items()), 
-                                        columns=['Grupo', 'Cantidad'])
-                df_grupos.to_excel(writer, sheet_name='Por_Grupo', index=False)
-                
-                # Hoja 3: Asignaciones por carrera
-                df_carreras = pd.DataFrame(list(reporte['por_carrera'].items()), 
-                                          columns=['Carrera', 'Cantidad'])
-                df_carreras.to_excel(writer, sheet_name='Por_Carrera', index=False)
-                
-                # Hoja 4: Lista completa de asignaciones
-                asignaciones_df.to_excel(writer, sheet_name='Asignaciones_Detalle', index=False)
-            
-            reporte['archivo_generado'] = archivo
-        
-        return reporte
-    
-    def generar_reporte_por_carrera(self, asignaciones_df: pd.DataFrame, carrera: str = None, 
-                                    guardar_excel: bool = True) -> Dict:
-        """Genera reporte específico de una carrera o todas las carreras en Excel"""
-        if asignaciones_df.empty:
-            return {'error': 'No hay asignaciones para generar reporte'}
-        
-        fecha_hora = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        if carrera:
-            df_carrera = asignaciones_df[asignaciones_df['carrera'] == carrera]
-            if df_carrera.empty:
-                return {'error': f'No hay asignaciones para la carrera: {carrera}'}
-            
-            reporte = {
-                'carrera': carrera,
-                'total_asignados': len(df_carrera),
-                'por_grupo': df_carrera['grupo'].value_counts().to_dict(),
-                'puntaje_promedio': df_carrera['puntaje'].mean()
-            }
-            
-            if guardar_excel:
-                archivo = os.path.join(self.carpeta_reportes, f"Reporte_{carrera.replace(' ', '_')}_{fecha_hora}.xlsx")
-                with pd.ExcelWriter(archivo, engine='openpyxl') as writer:
-                    df_carrera.to_excel(writer, sheet_name='Asignados', index=False)
-                    df_grupos = pd.DataFrame(list(reporte['por_grupo'].items()), 
-                                            columns=['Grupo', 'Cantidad'])
-                    df_grupos.to_excel(writer, sheet_name='Por_Grupo', index=False)
-                reporte['archivo_generado'] = archivo
-        else:
-            archivo = os.path.join(self.carpeta_reportes, f"Reporte_Todas_Carreras_{fecha_hora}.xlsx")
-            reporte = {'carreras': {}}
-            
-            if guardar_excel:
-                with pd.ExcelWriter(archivo, engine='openpyxl') as writer:
-                    carreras_unicas = asignaciones_df['carrera'].unique()
-                    
-                    resumen_list = []
-                    for carr in carreras_unicas:
-                        df_carr = asignaciones_df[asignaciones_df['carrera'] == carr]
-                        resumen_list.append({
-                            'Carrera': carr,
-                            'Total_Asignados': len(df_carr),
-                            'Puntaje_Promedio': round(df_carr['puntaje'].mean(), 2),
-                            'Puntaje_Max': df_carr['puntaje'].max(),
-                            'Puntaje_Min': df_carr['puntaje'].min()
-                        })
-                        reporte['carreras'][carr] = len(df_carr)
-                    
-                    pd.DataFrame(resumen_list).to_excel(writer, sheet_name='Resumen_Carreras', index=False)
-                    
-                    for i, carr in enumerate(carreras_unicas[:30]):
-                        df_carr = asignaciones_df[asignaciones_df['carrera'] == carr]
-                        nombre_hoja = carr[:31].replace('/', '-').replace('\\', '-')
-                        df_carr.to_excel(writer, sheet_name=nombre_hoja, index=False)
-                
-                reporte['archivo_generado'] = archivo
-        
-        return reporte
-    
-    def generar_reporte_por_grupo(self, asignaciones_df: pd.DataFrame, guardar_excel: bool = True) -> Dict:
-        """Genera reporte por grupos de asignación en Excel"""
-        if asignaciones_df.empty:
-            return {'error': 'No hay asignaciones para generar reporte'}
-        
-        fecha_hora = datetime.now().strftime("%Y%m%d_%H%M%S")
-        archivo = os.path.join(self.carpeta_reportes, f"Reporte_Por_Grupos_{fecha_hora}.xlsx")
-        
-        reporte = {
-            'por_grupo': asignaciones_df['grupo'].value_counts().to_dict(),
-            'detalle_por_grupo': {}
-        }
-        
-        if guardar_excel:
-            with pd.ExcelWriter(archivo, engine='openpyxl') as writer:
-                grupos_unicos = asignaciones_df['grupo'].unique()
-                
-                resumen_list = []
-                for grupo in grupos_unicos:
-                    df_grupo = asignaciones_df[asignaciones_df['grupo'] == grupo]
-                    resumen_list.append({
-                        'Grupo': grupo,
-                        'Total_Asignados': len(df_grupo),
-                        'Puntaje_Promedio': round(df_grupo['puntaje'].mean(), 2),
-                        'Puntaje_Max': df_grupo['puntaje'].max(),
-                        'Puntaje_Min': df_grupo['puntaje'].min()
-                    })
-                    reporte['detalle_por_grupo'][grupo] = len(df_grupo)
-                
-                pd.DataFrame(resumen_list).to_excel(writer, sheet_name='Resumen_Grupos', index=False)
-                
-                for grupo in grupos_unicos:
-                    df_grupo = asignaciones_df[asignaciones_df['grupo'] == grupo]
-                    nombre_hoja = grupo[:31]
-                    df_grupo.to_excel(writer, sheet_name=nombre_hoja, index=False)
-            
-            reporte['archivo_generado'] = archivo
-        
-        return reporte
-    
-    def generar_lista_asignados(self, asignaciones_df: pd.DataFrame, guardar_excel: bool = True) -> List[Dict]:
-        """Genera lista de todos los asignados y la guarda en Excel"""
-        if guardar_excel and not asignaciones_df.empty:
-            fecha_hora = datetime.now().strftime("%Y%m%d_%H%M%S")
-            archivo = os.path.join(self.carpeta_reportes, f"Lista_Asignados_{fecha_hora}.xlsx")
-            asignaciones_df.to_excel(archivo, index=False)
-        
-        return asignaciones_df.to_dict('records')
-
-
-#  GESTIÓN DE ACEPTACIÓN DE CUPOS 
+# GESTIÓN DE ACEPTACIÓN DE CUPOS 
 class GestorAceptacion:
     """
     Gestiona el proceso de aceptación de cupos.

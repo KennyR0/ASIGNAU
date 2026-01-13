@@ -1,19 +1,27 @@
 import pandas as pd
 from abc import abstractmethod, ABC
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List, Tuple, Protocol, runtime_checkable
 import os
-from dataclasses import dataclass
-from datetime import datetime
-from enum import Enum
-from Asignacion import (GrupoAsignacion,EstadoCupo,Cupo,MotorAsignacion,Reporte,GestorAceptacion)
-from PeriodoAsignacion import (PeriodoAsignacion,EstadoPeriodo,FasePeriodo,ConfiguracionPeriodo,GestorPeriodos)
+from dataclasses import dataclass, field
+from Asignacion import (MotorAsignacion, Reporte,
+                        EstrategiaClasificacion, EstrategiaDesempate, EstrategiaSegmentacion,
+                        ClasificacionSENESCYT, DesempateSENESCYT, SegmentacionPorcentual)
+from PeriodoAsignacion import (PeriodoAsignacion, EstadoPeriodo, GestorPeriodos)
 
-#ENUMERACIONES 
-class SegmentoAspirante(Enum):
-    POBLACION_GENERAL = 1
-    POLITICA_CUOTAS = 2
 
-#INTERFAZ DE ESTRATEGIA DE BASE DE DATOS 
+# INTERFACE PARA GESTIÓN DE PERIODOS (DIP)
+@runtime_checkable
+class IGestorPeriodos(Protocol):
+    """Interface para gestión de periodos (ISP + DIP)"""
+    def obtener_periodo_activo(self) -> Optional['PeriodoAsignacion']:
+        ...
+    def crear_periodo(self, codigo: str, nombre: str) -> Tuple[bool, str, Optional['PeriodoAsignacion']]:
+        ...
+    def listar_periodos(self) -> List[Dict]:
+        ...
+
+
+# PATRÓN ADAPTER - ESTRATEGIA DE BASE DE DATOS (Open/Closed Principle)
 class Base_Dato(ABC):
     @abstractmethod
     def cargar_base(self):
@@ -46,10 +54,22 @@ class BD_ADMIN(Base_Dato):
         return None
 
 class BD_USUARIO(Base_Dato):
+    """Adapter para base de datos de usuarios/postulantes (Dependency Inversion)"""
+    
+    def __init__(self, gestor_periodos: IGestorPeriodos = None):
+        # DIP: Dependencia inyectada, no creada internamente
+        self._gestor_periodos = gestor_periodos
+    
+    @property
+    def gestor_periodos(self) -> IGestorPeriodos:
+        """Lazy initialization con inyección de dependencias"""
+        if self._gestor_periodos is None:
+            self._gestor_periodos = GestorPeriodos()
+        return self._gestor_periodos
+    
     def cargar_base(self):
         # Intentar cargar desde el periodo activo primero
-        gestor = GestorPeriodos()
-        periodo = gestor.obtener_periodo_activo()
+        periodo = self.gestor_periodos.obtener_periodo_activo()
         
         if periodo and periodo.archivo_postulantes:
             excel = periodo.archivo_postulantes
@@ -163,22 +183,31 @@ class BD_POSTULACIONES:
             print(f"Error al guardar asignaciones: {e}")
             return False
 
-#CONTEXTO DE AUTENTICACIÓN 
+# CONTEXTO DE AUTENTICACIÓN (Single Responsibility Principle)
 class IniciarSesion:
+    """Clase con responsabilidad única: validar credenciales (SRP)"""
+    
     @classmethod
     def Iniciar(cls, intento_identificacion: str, intento_contra: str, bd: Base_Dato):
+        """Valida las credenciales contra la base de datos proporcionada (DIP)"""
         datos_usuario = bd.obtener_usuario(intento_identificacion, intento_contra)
         if datos_usuario is not None:
             return True, datos_usuario
         return False, None
 
-#INTERFAZ DE USUARIO 
+# CLASE BASE USUARIO (Herencia + Polimorfismo + Template Method)
 class Usuario(ABC):
+    
     @abstractmethod
     def mostrar_informacion(self):
         pass
+    
+    @abstractmethod
+    def obtener_identificacion(self) -> str:
+        """Retorna la identificación única del usuario"""
+        pass
 
-#CLASE ADMINISTRADOR 
+# CLASE ADMINISTRADOR (Herencia + Polimorfismo + DIP)
 @dataclass
 class Administrador(Usuario):
     Periodo = "2025 - 2"
@@ -188,21 +217,34 @@ class Administrador(Usuario):
     cedula: str = ""
     id: int = 0
     
-    # Gestor de periodos para el administrador
-    _gestor_periodos: GestorPeriodos = None
+    # DIP: Dependencias inyectadas
+    _gestor_periodos: IGestorPeriodos = field(default=None, repr=False)
+    _estrategia_clasificacion: EstrategiaClasificacion = field(default=None, repr=False)
+    _estrategia_desempate: EstrategiaDesempate = field(default=None, repr=False)
+    _estrategia_segmentacion: EstrategiaSegmentacion = field(default=None, repr=False)
 
     @classmethod
-    def crear_desde_bd(cls, datos: Dict[str, Any]):
+    def crear_desde_bd(cls, datos: Dict[str, Any], 
+                       gestor_periodos: IGestorPeriodos = None,
+                       estrategia_clasificacion: EstrategiaClasificacion = None,
+                       estrategia_desempate: EstrategiaDesempate = None,
+                       estrategia_segmentacion: EstrategiaSegmentacion = None):
+        """Factory Method con inyección de dependencias"""
         admin = cls(
             identificacion=str(datos.get("IDENTIFICACIÓN", "")),
             nombre=str(datos.get("NOMBRE", "")),
             cedula=str(datos.get("CEDULA", "")),
             id=int(datos.get("ID", 0))
         )
-        admin._gestor_periodos = GestorPeriodos()
+        # DIP: Inyectar dependencias o usar defaults
+        admin._gestor_periodos = gestor_periodos or GestorPeriodos()
+        admin._estrategia_clasificacion = estrategia_clasificacion or ClasificacionSENESCYT()
+        admin._estrategia_desempate = estrategia_desempate or DesempateSENESCYT()
+        admin._estrategia_segmentacion = estrategia_segmentacion or SegmentacionPorcentual()
         return admin
     
     def mostrar_informacion(self):
+        """Polimorfismo: Implementación específica de Administrador"""
         return {
             'tipo': 'Administrador',
             'identificacion': self.identificacion,
@@ -211,6 +253,10 @@ class Administrador(Usuario):
             'id': self.id,
             'periodo': self.Periodo
         }
+    
+    def obtener_identificacion(self) -> str:
+        """Implementación de la interfaz Usuario"""
+        return self.identificacion
     
     def obtener_gestor_periodos(self) -> GestorPeriodos:
         """Retorna el gestor de periodos"""
@@ -238,9 +284,31 @@ class Administrador(Usuario):
         gestor = self.obtener_gestor_periodos()
         return gestor.listar_periodos()
         
-    def ejecutar_asignacion(self, oferta_df, postulaciones_df, porcentajes: Dict[str, float] = None, es_instituto: bool = False):
-        """Ejecuta la asignación de cupos con los datos proporcionados"""
-        motor = MotorAsignacion(oferta_df, postulaciones_df, porcentajes, es_instituto)
+    def set_estrategia_clasificacion(self, estrategia: EstrategiaClasificacion):
+        """Permite cambiar la estrategia de clasificación (OCP)"""
+        self._estrategia_clasificacion = estrategia
+    
+    def set_estrategia_desempate(self, estrategia: EstrategiaDesempate):
+        """Permite cambiar la estrategia de desempate (OCP)"""
+        self._estrategia_desempate = estrategia
+    
+    def set_estrategia_segmentacion(self, estrategia: EstrategiaSegmentacion):
+        """Permite cambiar la estrategia de segmentación (OCP)"""
+        self._estrategia_segmentacion = estrategia
+        
+    def ejecutar_asignacion(self, oferta_df, postulaciones_df, 
+                            porcentajes: Dict[str, float] = None, 
+                            es_instituto: bool = False):
+        """
+        Ejecuta la asignación de cupos con las estrategias inyectadas (DIP).
+        Utiliza Strategy Pattern para permitir diferentes comportamientos.
+        """
+        motor = MotorAsignacion(
+            oferta_df, postulaciones_df, porcentajes, es_instituto,
+            estrategia_clasificacion=self._estrategia_clasificacion,
+            estrategia_desempate=self._estrategia_desempate,
+            estrategia_segmentacion=self._estrategia_segmentacion
+        )
         return motor.ejecutar_asignacion()
     
     def ejecutar_asignacion_periodo(self, callback_progreso=None) -> Tuple[bool, str, Dict]:
@@ -266,7 +334,7 @@ class Administrador(Usuario):
         reporte = Reporte()
         return reporte.generar_reporte_completo(asignaciones_df)
 
-#  CLASE POSTULANTE 
+#CLASE POSTULANTE
 @dataclass
 class Postulante(Usuario):
     identificacion: str = ""
@@ -284,6 +352,7 @@ class Postulante(Usuario):
     
     @classmethod
     def crear_desde_bd(cls, datos: Dict[str, Any]):
+        """Factory Method para crear Postulante desde datos de BD"""
         return cls(
             identificacion=str(datos.get("IDENTIFICACIÓN", "")),
             contraseña=str(datos.get("CONTRASEÑA", "")),
@@ -298,6 +367,7 @@ class Postulante(Usuario):
         )
 
     def mostrar_informacion(self):
+        """Polimorfismo: Implementación específica de Postulante"""
         return {
             'tipo': 'Postulante',
             'identificacion': self.identificacion,
@@ -308,8 +378,12 @@ class Postulante(Usuario):
             'prioridad': self.prioridad_carrera,
             'estado_cupo': self.estado_cupo
         }
+    
+    def obtener_identificacion(self) -> str:
+        """Implementación de la interfaz Usuario (Liskov Substitution)"""
+        return self.identificacion
 
-    def ver_puntaje(self):
+    def ver_puntaje(self) -> float:
         return self.puntaje_postulacion
     
     def obtener_postulaciones(self):
@@ -329,28 +403,41 @@ class Postulante(Usuario):
             return True
         return False
 
-#  FACTORY METHOD PARA USUARIOS 
+# FACTORY METHOD PARA USUARIOS (Patrón Creacional)
 class SobrecargaUsuario:
+    """
+    Factory Method : Crea el tipo correcto de Usuario según la BD.
+    """
     @staticmethod
-    def crear_usuario(bd: Base_Dato, datos: Dict[str, Any]):
+    def crear_usuario(bd: Base_Dato, datos: Dict[str, Any]) -> Optional[Usuario]:
         if isinstance(bd, BD_ADMIN):
             return Administrador.crear_desde_bd(datos)
         elif isinstance(bd, BD_USUARIO):
             return Postulante.crear_desde_bd(datos)
         return None
 
-#  PATRÓN FACADE 
+
+# PATRÓN FACADE (Patrón Estructural)
+
 class SistemaAutenticacion:
-    @staticmethod
-    def login_postulante(identificacion: str, contraseña: str):
-        return SistemaAutenticacion._autenticar(identificacion, contraseña, BD_USUARIO())
     
     @staticmethod
-    def login_administrador(identificacion: str, contraseña: str):
-        return SistemaAutenticacion._autenticar(identificacion, contraseña, BD_ADMIN())
+    def login_postulante(identificacion: str, contraseña: str, 
+                         bd: Base_Dato = None) -> Tuple[bool, Optional[Usuario], str]:
+        """Login de postulante con inyección de dependencias opcional"""
+        bd = bd or BD_USUARIO()
+        return SistemaAutenticacion._autenticar(identificacion, contraseña, bd)
     
     @staticmethod
-    def _autenticar(identificacion: str, contraseña: str, bd: Base_Dato):
+    def login_administrador(identificacion: str, contraseña: str,
+                            bd: Base_Dato = None) -> Tuple[bool, Optional[Usuario], str]:
+        """Login de administrador con inyección de dependencias opcional"""
+        bd = bd or BD_ADMIN()
+        return SistemaAutenticacion._autenticar(identificacion, contraseña, bd)
+    
+    @staticmethod
+    def _autenticar(identificacion: str, contraseña: str, bd: Base_Dato) -> Tuple[bool, Optional[Usuario], str]:
+        """Método privado que realiza la autenticación real"""
         try:
             exito, datos_usuario = IniciarSesion.Iniciar(identificacion, contraseña, bd)
             if not exito or datos_usuario is None:
@@ -365,7 +452,8 @@ class SistemaAutenticacion:
             return False, None, f"Error en autenticación: {str(e)}"
     
     @staticmethod
-    def obtener_tipo_usuario(usuario) -> str:
+    def obtener_tipo_usuario(usuario: Usuario) -> str:
+        """Polimorfismo: Identifica el tipo de usuario"""
         if isinstance(usuario, Administrador):
             return "administrador"
         elif isinstance(usuario, Postulante):

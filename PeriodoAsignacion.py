@@ -8,9 +8,13 @@ from typing import Optional, Dict, List, Any, Tuple
 import shutil
 from Asignacion import MotorAsignacion, Reporte
 
+# PATRÓN STATE - ENUMERACIONES DE ESTADO (Comportamiento)
 
 class EstadoPeriodo(Enum):
-    """Estados posibles de un periodo de asignación"""
+    """
+    State Pattern: Estados posibles de un periodo de asignación.
+    Controla las transiciones válidas del periodo.
+    """
     NO_INICIADO = "NO_INICIADO"       # Periodo creado pero sin datos
     DATOS_CARGADOS = "DATOS_CARGADOS"  # Archivos cargados, listo para asignar
     EN_PROCESO = "EN_PROCESO"          # Asignación en progreso
@@ -19,7 +23,10 @@ class EstadoPeriodo(Enum):
 
 
 class FasePeriodo(Enum):
-    """Fases del proceso de asignación dentro de un periodo"""
+    """
+    State Pattern: Fases del proceso de asignación.
+    Define el flujo de trabajo dentro de un periodo.
+    """
     CONFIGURACION = 1      # Configurando porcentajes
     CARGA_DATOS = 2        # Cargando archivos
     ASIGNACION = 3         # Ejecutando asignación
@@ -28,9 +35,16 @@ class FasePeriodo(Enum):
     CIERRE = 6             # Cierre del periodo
 
 
+# 
+# PATRÓN BUILDER - CONFIGURACIÓN DE PERIODO (Creacional)
+# 
+
 @dataclass
 class ConfiguracionPeriodo:
-    """Configuración de un periodo de asignación"""
+    """
+    Builder Pattern: Configuración de un periodo de asignación.
+    Permite construir la configuración paso a paso con valores por defecto.
+    """
     porcentajes: Dict[str, float] = field(default_factory=dict)
     es_instituto: bool = False
     max_vueltas_asignacion: int = 3
@@ -281,29 +295,23 @@ class PeriodoAsignacion:
             asignaciones_acumuladas = []
             postulantes_asignados = set()
             
-            # Ejecutar vueltas de asignación
-            for num_vuelta in range(1, self.configuracion.max_vueltas_asignacion + 1):
-                if callback_progreso:
-                    callback_progreso(f"\n=== VUELTA {num_vuelta} DE ASIGNACIÓN ===")
-                
-                vuelta = VueltaAsignacion(
-                    numero_vuelta=num_vuelta,
-                    fecha_inicio=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                )
-                
-                # Filtrar postulantes que ya tienen asignación
-                postulantes_disponibles = self._postulantes_df[
-                    ~self._postulantes_df['IDENTIFICACIÓN'].astype(str).isin(postulantes_asignados)
-                ].copy()
-                
-                if postulantes_disponibles.empty:
-                    if callback_progreso:
-                        callback_progreso("No hay más postulantes disponibles.")
-                    vuelta.fecha_fin = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    vuelta.completada = True
-                    self.vueltas.append(vuelta)
-                    break
-                
+            # Ejecutar asignación (UNA SOLA VEZ para evitar asignar más cupos de los disponibles)
+            # Las "vueltas" adicionales son para reasignaciones cuando hay cupos liberados
+            num_vuelta = 1
+            if callback_progreso:
+                callback_progreso(f"\n=== EJECUTANDO ASIGNACIÓN ===")
+            
+            vuelta = VueltaAsignacion(
+                numero_vuelta=num_vuelta,
+                fecha_inicio=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
+            
+            # Filtrar postulantes que ya tienen asignación
+            postulantes_disponibles = self._postulantes_df[
+                ~self._postulantes_df['IDENTIFICACIÓN'].astype(str).isin(postulantes_asignados)
+            ].copy()
+            
+            if not postulantes_disponibles.empty:
                 # Crear motor de asignación
                 motor = MotorAsignacion(
                     self._oferta_df,
@@ -315,40 +323,35 @@ class PeriodoAsignacion:
                 # Ejecutar asignación
                 df_asignaciones = motor.ejecutar_asignacion()
                 
-                if df_asignaciones.empty:
+                if not df_asignaciones.empty:
+                    # Registrar asignaciones
+                    nuevos_asignados = len(df_asignaciones)
+                    asignaciones_acumuladas.append(df_asignaciones)
+                    
+                    # Actualizar postulantes asignados
+                    postulantes_asignados.update(df_asignaciones['identificacion'].astype(str).tolist())
+                    
+                    # Actualizar vuelta
+                    vuelta.total_asignados = nuevos_asignados
+                    vuelta.estadisticas = motor.obtener_estadisticas()
+                    
+                    # Actualizar estadísticas
+                    estadisticas_totales['vueltas_ejecutadas'] += 1
+                    estadisticas_totales['asignados_por_vuelta'].append(nuevos_asignados)
+                    estadisticas_totales['total_asignados'] += nuevos_asignados
+                    
                     if callback_progreso:
-                        callback_progreso("No se realizaron asignaciones en esta vuelta.")
-                    vuelta.fecha_fin = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    vuelta.completada = True
-                    self.vueltas.append(vuelta)
-                    break
+                        callback_progreso(f"Asignados: {nuevos_asignados} postulantes")
+            
+            vuelta.fecha_fin = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            vuelta.completada = True
+            self.vueltas.append(vuelta)
                 
-                # Registrar asignaciones
-                nuevos_asignados = len(df_asignaciones)
-                asignaciones_acumuladas.append(df_asignaciones)
-                
-                # Actualizar postulantes asignados
-                postulantes_asignados.update(df_asignaciones['identificacion'].astype(str).tolist())
-                
-                # Actualizar vuelta
-                vuelta.total_asignados = nuevos_asignados
-                vuelta.estadisticas = motor.obtener_estadisticas()
-                vuelta.fecha_fin = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                vuelta.completada = True
-                
-                self.vueltas.append(vuelta)
-                
-                # Actualizar estadísticas
-                estadisticas_totales['vueltas_ejecutadas'] += 1
-                estadisticas_totales['asignados_por_vuelta'].append(nuevos_asignados)
-                estadisticas_totales['total_asignados'] += nuevos_asignados
-                
-                if callback_progreso:
-                    callback_progreso(f"Vuelta {num_vuelta}: {nuevos_asignados} postulantes asignados")
-                
-                # Verificar si se asignaron todos o no hubo cambios significativos
-                if nuevos_asignados == 0:
-                    break
+            # VALIDACIÓN CRÍTICA: Verificar que no se asignaron más cupos que disponibles
+            total_cupos_disponibles = self.total_cupos_ofertados
+            if estadisticas_totales['total_asignados'] > total_cupos_disponibles:
+                print(f"\n⚠️ ALERTA: Se detectaron {estadisticas_totales['total_asignados']} asignados pero solo hay {total_cupos_disponibles} cupos")
+                print("   Este error NO debería ocurrir. Revisar lógica de asignación.")
             
             # Consolidar asignaciones
             if asignaciones_acumuladas:
@@ -604,20 +607,38 @@ class PeriodoAsignacion:
         return self._postulantes_df
 
 
-#GESTOR DE PERIODOS
+# 
+# GESTOR DE PERIODOS - PATRÓN SINGLETON (Creacional)
+# 
 
 class GestorPeriodos:
     """
     Gestiona los periodos de asignación del sistema.
-    Singleton pattern para acceso global.
+    
+    Patrón Singleton:
+    - Garantiza una única instancia del gestor en toda la aplicación
+    - Proporciona punto de acceso global al periodo activo
+    - Mantiene consistencia del estado entre componentes
+    
+    Principios SOLID aplicados:
+    - S: Solo gestiona periodos (no asignación, no reportes)
+    - O: Extensible sin modificar (nuevos estados de periodo)
+    - D: PeriodoAsignacion se puede inyectar/sustituir
     """
     _instance = None
     _periodo_activo: Optional[PeriodoAsignacion] = None
     
     def __new__(cls):
+        """Singleton: Retorna siempre la misma instancia"""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
+    
+    @classmethod
+    def reset_instance(cls):
+        """Para testing: permite resetear el singleton"""
+        cls._instance = None
+        cls._periodo_activo = None
     
     def crear_periodo(self, codigo: str, nombre: str = "") -> Tuple[bool, str, Optional[PeriodoAsignacion]]:
         """Crea un nuevo periodo de asignación"""

@@ -60,7 +60,7 @@ class VentanaAdministrador:
         barra_superior.pack(fill=tk.X, side=tk.TOP)
         
         titulo = tk.Label(barra_superior, 
-                         text=f"Bienvenido Administrador: {self.admin.nombre}", 
+                         text=f"Bienvenido Administrador", 
                          font=("Arial", 16, "bold"), 
                          bg="#2c3e50", 
                          fg="white")
