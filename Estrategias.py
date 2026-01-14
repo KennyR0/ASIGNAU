@@ -17,7 +17,7 @@ class GrupoAsignacion(Enum):
     MERITO_ACADEMICO = 3           # Al menos 20%
     OTROS_RECONOCIMIENTOS = 4      # Máximo 2%
     BACHILLERES_PUEBLOS = 5        # Máximo 10%
-    BACHILLERES_ULTIMO_ANIO = 6    # Al menos 20%
+    BACHILLERES_ULTIMO_AÑO = 6    # Al menos 20%
     POBLACION_GENERAL = 7          # Al menos 20%
 
 
@@ -126,7 +126,7 @@ class ClasificacionSENESCYT(EstrategiaClasificacion):
         if es_bachiller_ultimo and identificacion not in bachilleres_participaron:
             if es_pueblos_nacionalidades:
                 grupos.append(GrupoAsignacion.BACHILLERES_PUEBLOS)
-            grupos.append(GrupoAsignacion.BACHILLERES_ULTIMO_ANIO)
+            grupos.append(GrupoAsignacion.BACHILLERES_ULTIMO_AÑO)
         
         # TODOS participan en población general
         grupos.append(GrupoAsignacion.POBLACION_GENERAL)
@@ -224,7 +224,7 @@ class SegmentacionPorcentual(EstrategiaSegmentacion):
             GrupoAsignacion.MERITO_ACADEMICO: int(total_cupos * porcentajes.get('merito_academico', 0)),
             GrupoAsignacion.OTROS_RECONOCIMIENTOS: int(total_cupos * porcentajes.get('otros_reconocimientos', 0)),
             GrupoAsignacion.BACHILLERES_PUEBLOS: int(total_cupos * porcentajes.get('bachilleres_pueblos', 0)),
-            GrupoAsignacion.BACHILLERES_ULTIMO_ANIO: int(total_cupos * porcentajes.get('bachilleres_ultimo', 0)),
+            GrupoAsignacion.BACHILLERES_ULTIMO_AÑO: int(total_cupos * porcentajes.get('bachilleres_ultimo', 0)),
             GrupoAsignacion.POBLACION_GENERAL: int(total_cupos * porcentajes.get('poblacion_general', 0))
         }
         
@@ -294,6 +294,6 @@ class SegmentacionSoloPoblacionGeneral(EstrategiaSegmentacion):
             GrupoAsignacion.MERITO_ACADEMICO: 0,
             GrupoAsignacion.OTROS_RECONOCIMIENTOS: 0,
             GrupoAsignacion.BACHILLERES_PUEBLOS: 0,
-            GrupoAsignacion.BACHILLERES_ULTIMO_ANIO: 0,
+            GrupoAsignacion.BACHILLERES_ULTIMO_AÑO: 0,
             GrupoAsignacion.POBLACION_GENERAL: total_cupos
         }

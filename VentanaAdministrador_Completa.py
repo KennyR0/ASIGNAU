@@ -514,7 +514,7 @@ class VentanaAdministrador:
             ("Merito Academico (min 20%):", 20),
             ("Otros Reconocimientos (max 2%):", 2),
             ("Bachilleres Pueblos (max 10%):", 10),
-            ("Bachilleres Ultimo Anio (min 20%):", 20),
+            ("Bachilleres Ultimo AÑO (min 20%):", 20),
             ("Poblacion General (min 20%):", 20)
         ]
         
@@ -690,7 +690,7 @@ class VentanaAdministrador:
                 'merito_academico': float(self.porcentajes["Merito Academico"].get()) / 100,
                 'otros_reconocimientos': float(self.porcentajes["Otros Reconocimientos"].get()) / 100,
                 'bachilleres_pueblos': float(self.porcentajes["Bachilleres Pueblos"].get()) / 100,
-                'bachilleres_ultimo': float(self.porcentajes["Bachilleres Ultimo Anio"].get()) / 100,
+                'bachilleres_ultimo': float(self.porcentajes["Bachilleres Ultimo AÑO"].get()) / 100,
                 'poblacion_general': float(self.porcentajes["Poblacion General"].get()) / 100
             }
             

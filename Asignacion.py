@@ -365,7 +365,7 @@ class MotorAsignacion:
                 self.postulantes_asignados.add(identificacion)
                 
                 # Marcar bachiller como participado (Art. 52 numeral 5)
-                if grupo in [GrupoAsignacion.BACHILLERES_PUEBLOS, GrupoAsignacion.BACHILLERES_ULTIMO_ANIO]:
+                if grupo in [GrupoAsignacion.BACHILLERES_PUEBLOS, GrupoAsignacion.BACHILLERES_ULTIMO_AÑO]:
                     self.bachilleres_participaron.add(identificacion)
                 
                 asignado = True
@@ -374,7 +374,7 @@ class MotorAsignacion:
             # Si no se asignó, el postulante participará en el siguiente grupo
             if not asignado:
                 # Marcar bachiller como participado aunque no haya obtenido cupo
-                if grupo in [GrupoAsignacion.BACHILLERES_PUEBLOS, GrupoAsignacion.BACHILLERES_ULTIMO_ANIO]:
+                if grupo in [GrupoAsignacion.BACHILLERES_PUEBLOS, GrupoAsignacion.BACHILLERES_ULTIMO_AÑO]:
                     self.bachilleres_participaron.add(identificacion)
     
     def liberar_cupos_no_usados(self):
@@ -507,7 +507,7 @@ class MotorAsignacion:
             GrupoAsignacion.MERITO_ACADEMICO,
             GrupoAsignacion.OTROS_RECONOCIMIENTOS,
             GrupoAsignacion.BACHILLERES_PUEBLOS,
-            GrupoAsignacion.BACHILLERES_ULTIMO_ANIO,
+            GrupoAsignacion.BACHILLERES_ULTIMO_AÑO,
         ]
         
         # 3. Asignar por cada grupo (excepto población general)
