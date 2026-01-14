@@ -253,73 +253,191 @@ class Reporte:
             reporte['archivo_generado'] = archivo
         
         return reporte
-    
-    def generar_lista_asignados(self, asignaciones_df: pd.DataFrame, 
-                                 guardar_excel: bool = True) -> List[Dict]:
+
+    def generar_matriz_asignacion(self, asignaciones_df: pd.DataFrame,
+                                   oferta_df: pd.DataFrame,
+                                   postulantes_df: pd.DataFrame,
+                                   carpeta_periodo: str = None) -> Dict:
         """
-        Genera lista de todos los asignados.
-        
-        Args:
-            asignaciones_df: DataFrame con las asignaciones
-            guardar_excel: Si debe guardar el archivo Excel
-            
-        Returns:
-            Lista de diccionarios con los asignados
-        """
-        if guardar_excel and not asignaciones_df.empty:
-            archivo = self._crear_ruta_archivo("Lista_Asignados")
-            asignaciones_df.to_excel(archivo, index=False)
-        
-        return asignaciones_df.to_dict('records')
-    
-    def generar_reporte_estadistico(self, asignaciones_df: pd.DataFrame,
-                                     guardar_excel: bool = True) -> Dict:
-        """
-        Genera un reporte estadístico detallado.
-        
-        Returns:
-            Dict con estadísticas avanzadas
+        Genera la matriz de asignación oficial con todos los datos combinados.
         """
         if asignaciones_df.empty:
-            return {'error': 'No hay datos para estadísticas'}
+            return {'error': 'No hay asignaciones para generar matriz', 'archivo': None}
         
-        estadisticas = {
-            'total': len(asignaciones_df),
-            'puntaje': {
-                'promedio': round(asignaciones_df['puntaje'].mean(), 2),
-                'mediana': round(asignaciones_df['puntaje'].median(), 2),
-                'desviacion': round(asignaciones_df['puntaje'].std(), 2),
-                'minimo': asignaciones_df['puntaje'].min(),
-                'maximo': asignaciones_df['puntaje'].max(),
-            },
-            'distribucion_grupos': asignaciones_df['grupo'].value_counts().to_dict(),
-            'distribucion_prioridad': asignaciones_df['prioridad'].value_counts().to_dict() 
-                if 'prioridad' in asignaciones_df.columns else {},
-            'carreras_mas_demandadas': asignaciones_df['carrera'].value_counts().head(10).to_dict()
-        }
-        
-        if guardar_excel:
-            archivo = self._crear_ruta_archivo("Reporte_Estadistico")
+        try:
+            # Crear copia para no modificar el original
+            matriz = asignaciones_df.copy()
             
+            # Normalizar tipos de datos para merge
+            matriz['cus_id'] = matriz['cus_id'].astype(str)
+            matriz['identificacion'] = matriz['identificacion'].astype(str)
+            
+            if 'CUS_ID' in oferta_df.columns:
+                oferta_df = oferta_df.copy()
+                oferta_df['CUS_ID'] = oferta_df['CUS_ID'].astype(str)
+            
+            if 'IDENTIFICACIÓN' in postulantes_df.columns:
+                postulantes_df = postulantes_df.copy()
+                postulantes_df['IDENTIFICACIÓN'] = postulantes_df['IDENTIFICACIÓN'].astype(str)
+            
+            # Columnas de la oferta académica a incluir
+            columnas_oferta = {
+                'AREA_NOMBRE': 'CAMPO_AMPLIO',
+                'NIVEL': 'NIVEL',
+                'IES_NOMBRE_INSTIT': 'FACULTAD',
+                'DESCRIPCION_TIPO_CUPO': 'TIPO_OFERTA',
+                'OFA_ID': 'ID_OFERTA_ULEAI',
+                'IES_ID_SNIESE': 'ID_OFERTA_SENESCYT',
+                'CUS_ID': 'CUS_ID',
+                'CUS_TOTAL_CUPOS': 'TOTAL_CUPOS',
+                'CAR_NOMBRE_CARRERA': 'CARRERA',
+                'MODALIDAD': 'MODALIDAD',
+                'JORNADA': 'JORNADA',
+                'PRO_NOMBRE': 'PROVINCIA',
+                'CAN_NOMBRE': 'CANTON'
+            }
+            
+            # Columnas de postulantes a incluir
+            columnas_postulantes = {
+                'IDENTIFICACIÓN': 'IDENTIFICACION',
+                'PUNTAJE_POSTULACION': 'NOTA_POSTULACION',
+                'SEGMENTO_ASPIRANTE': 'SEGMENTO_ASPIRANTE',
+                'PRIORIDAD_ELECCION_CARRERA': 'ORDEN_PRIORIDAD',
+                'FECHA_POSTULACION': 'FECHA_POSTULACION',
+                'INSTANCIA_POSTULACION': 'INSTANCIA_POSTULACION',
+                'VULNERABILIDAD_SOCIOECONOMICA': 'VULNERABILIDAD_SOCIOECONOMICA',
+                'CUADRO_HONOR': 'MERITO_ACADEMICO',
+                'PUEBLOS_NACIONALIDADES': 'BACHILLER_PUEBLOS_NACIONALIDADES',
+                'BACHILLER_ULTIMO_ANIO': 'BACHILLER_ULTIMO_ANIO',
+                'SEXO': 'SEXO',
+                'AUTOIDENTIFICACION': 'AUTOIDENTIFICACION'
+            }
+            
+            # Merge con oferta académica
+            cols_oferta_disponibles = [c for c in columnas_oferta.keys() if c in oferta_df.columns]
+            if cols_oferta_disponibles and 'CUS_ID' in oferta_df.columns:
+                oferta_subset = oferta_df[cols_oferta_disponibles].drop_duplicates(subset=['CUS_ID'])
+                matriz = matriz.merge(
+                    oferta_subset,
+                    left_on='cus_id',
+                    right_on='CUS_ID',
+                    how='left'
+                )
+            
+            # Merge con postulantes
+            cols_post_disponibles = [c for c in columnas_postulantes.keys() if c in postulantes_df.columns]
+            if cols_post_disponibles and 'IDENTIFICACIÓN' in postulantes_df.columns:
+                # Obtener datos únicos por postulante (tomar el primero si hay duplicados)
+                postulantes_unicos = postulantes_df.drop_duplicates(subset=['IDENTIFICACIÓN'])
+                postulantes_subset = postulantes_unicos[cols_post_disponibles]
+                matriz = matriz.merge(
+                    postulantes_subset,
+                    left_on='identificacion',
+                    right_on='IDENTIFICACIÓN',
+                    how='left'
+                )
+            
+            # Renombrar columnas para la matriz final
+            rename_map = {}
+            for orig, nuevo in columnas_oferta.items():
+                if orig in matriz.columns:
+                    rename_map[orig] = nuevo
+            for orig, nuevo in columnas_postulantes.items():
+                if orig in matriz.columns and orig not in rename_map:
+                    rename_map[orig] = nuevo
+            
+            # Renombrar columnas de asignación
+            rename_map.update({
+                'identificacion': 'IDENTIFICACION_POSTULANTE',
+                'cus_id': 'CUS_ID_ASIGNADO',
+                'ofa_id': 'OFA_ID_ASIGNADO',
+                'carrera': 'CARRERA_ASIGNADA',
+                'puntaje': 'PUNTAJE_ASIGNACION',
+                'grupo': 'GRUPO_ASIGNACION',
+                'prioridad': 'PRIORIDAD_ELECCION',
+                'fecha_asignacion': 'FECHA_ASIGNACION',
+                'estado': 'ESTADO_ASIGNACION'
+            })
+            
+            matriz = matriz.rename(columns=rename_map)
+            
+            # Ordenar columnas de forma lógica
+            columnas_orden = [
+                # Datos de la oferta
+                'CAMPO_AMPLIO', 'NIVEL', 'FACULTAD', 'CARRERA', 'MODALIDAD', 'JORNADA',
+                'PROVINCIA', 'CANTON', 'TIPO_OFERTA', 'ID_OFERTA_ULEAI', 'ID_OFERTA_SENESCYT',
+                'CUS_ID_ASIGNADO', 'TOTAL_CUPOS',
+                # Datos de asignación
+                'GRUPO_ASIGNACION', 'PUNTAJE_ASIGNACION', 'PRIORIDAD_ELECCION', 
+                'FECHA_ASIGNACION', 'ESTADO_ASIGNACION',
+                # Datos del postulante
+                'IDENTIFICACION_POSTULANTE', 'NOTA_POSTULACION', 'ORDEN_PRIORIDAD',
+                'SEGMENTO_ASPIRANTE', 'VULNERABILIDAD_SOCIOECONOMICA', 'MERITO_ACADEMICO',
+                'BACHILLER_PUEBLOS_NACIONALIDADES', 'BACHILLER_ULTIMO_ANIO',
+                'INSTANCIA_POSTULACION', 'FECHA_POSTULACION', 'AUTOIDENTIFICACION', 'SEXO'
+            ]
+            
+            # Filtrar solo las columnas que existen
+            columnas_finales = [c for c in columnas_orden if c in matriz.columns]
+            # Agregar columnas que no están en el orden pero existen
+            columnas_extra = [c for c in matriz.columns if c not in columnas_finales]
+            columnas_finales.extend(columnas_extra)
+            
+            matriz = matriz[columnas_finales]
+            
+            # Determinar ruta del archivo
+            if carpeta_periodo:
+                archivo = os.path.join(carpeta_periodo, f"Matriz_Asignacion_{self._obtener_timestamp()}.xlsx")
+            else:
+                archivo = self._crear_ruta_archivo("Matriz_Asignacion")
+            
+            # Guardar archivo Excel
             with pd.ExcelWriter(archivo, engine='openpyxl') as writer:
-                # Estadísticas de puntaje
-                df_puntaje = pd.DataFrame([estadisticas['puntaje']])
-                df_puntaje.to_excel(writer, sheet_name='Estadisticas_Puntaje', index=False)
+                matriz.to_excel(writer, sheet_name='Matriz_Asignacion', index=False)
                 
-                # Distribución por grupos
-                df_grupos = pd.DataFrame(
-                    list(estadisticas['distribucion_grupos'].items()),
-                    columns=['Grupo', 'Cantidad']
-                )
-                df_grupos.to_excel(writer, sheet_name='Distribucion_Grupos', index=False)
+                # Hoja de resumen
+                resumen = pd.DataFrame({
+                    'Métrica': [
+                        'Total Asignados',
+                        'Puntaje Promedio',
+                        'Puntaje Máximo',
+                        'Puntaje Mínimo',
+                        'Fecha Generación'
+                    ],
+                    'Valor': [
+                        len(matriz),
+                        round(matriz['PUNTAJE_ASIGNACION'].mean(), 2) if 'PUNTAJE_ASIGNACION' in matriz.columns else 'N/A',
+                        matriz['PUNTAJE_ASIGNACION'].max() if 'PUNTAJE_ASIGNACION' in matriz.columns else 'N/A',
+                        matriz['PUNTAJE_ASIGNACION'].min() if 'PUNTAJE_ASIGNACION' in matriz.columns else 'N/A',
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    ]
+                })
+                resumen.to_excel(writer, sheet_name='Resumen', index=False)
                 
-                # Top carreras
-                df_top = pd.DataFrame(
-                    list(estadisticas['carreras_mas_demandadas'].items()),
-                    columns=['Carrera', 'Asignados']
-                )
-                df_top.to_excel(writer, sheet_name='Top_Carreras', index=False)
+                # Distribución por grupo
+                if 'GRUPO_ASIGNACION' in matriz.columns:
+                    dist_grupo = matriz['GRUPO_ASIGNACION'].value_counts().reset_index()
+                    dist_grupo.columns = ['Grupo', 'Cantidad']
+                    dist_grupo.to_excel(writer, sheet_name='Por_Grupo', index=False)
+                
+                # Distribución por carrera
+                col_carrera = 'CARRERA' if 'CARRERA' in matriz.columns else 'CARRERA_ASIGNADA'
+                if col_carrera in matriz.columns:
+                    dist_carrera = matriz[col_carrera].value_counts().reset_index()
+                    dist_carrera.columns = ['Carrera', 'Asignados']
+                    dist_carrera.to_excel(writer, sheet_name='Por_Carrera', index=False)
             
-            estadisticas['archivo_generado'] = archivo
-        
-        return estadisticas
+            return {
+                'exito': True,
+                'archivo': archivo,
+                'total_registros': len(matriz),
+                'mensaje': f"Matriz de asignación generada exitosamente con {len(matriz)} registros"
+            }
+            
+        except Exception as e:
+            return {
+                'exito': False,
+                'archivo': None,
+                'error': str(e),
+                'mensaje': f"Error al generar matriz: {str(e)}"
+            }

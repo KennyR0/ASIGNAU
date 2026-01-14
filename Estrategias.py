@@ -54,7 +54,6 @@ class EstrategiaDesempate(ABC):
     
     Permite implementar diferentes criterios de ordenamiento:
     - SENESCYT (puntaje, vulnerabilidad, fecha)
-    - Solo puntaje
     - Personalizada
     """
     
@@ -76,23 +75,13 @@ class EstrategiaSegmentacion(ABC):
     """
     Strategy Interface: Define cómo segmentar los cupos por grupo.
     
-    Permite implementar diferentes distribuciones:
-    - Porcentual (configurable)
-    - Institutos (fija según Art. 53)
-    - Personalizada
+    Permite implementar diferentes distribuciones de cupos
     """
     
     @abstractmethod
     def segmentar(self, total_cupos: int, porcentajes: Dict[str, float]) -> Dict[GrupoAsignacion, int]:
         """
         Segmenta los cupos totales según los porcentajes.
-        
-        Args:
-            total_cupos: Total de cupos a distribuir
-            porcentajes: Diccionario con porcentajes por grupo
-            
-        Returns:
-            Diccionario con cupos por GrupoAsignacion
         """
         pass
 
@@ -103,7 +92,7 @@ class EstrategiaSegmentacion(ABC):
 
 class ClasificacionSENESCYT(EstrategiaClasificacion):
     """
-    Clasificación oficial según normativa SENESCYT (Art. 52).
+    Clasificación oficial según normativa SENESCYT.
     
     Evalúa múltiples criterios para determinar a qué grupos
     pertenece cada postulante.
@@ -143,20 +132,6 @@ class ClasificacionSENESCYT(EstrategiaClasificacion):
         grupos.append(GrupoAsignacion.POBLACION_GENERAL)
         
         return grupos
-
-
-class ClasificacionSoloMerito(EstrategiaClasificacion):
-    """
-    Clasificación simplificada: Solo por mérito (sin grupos especiales).
-    
-    Útil para procesos de admisión donde no aplican cuotas
-    o para pruebas del sistema.
-    """
-    
-    def clasificar(self, postulante: Dict, bachilleres_participaron: Set[str]) -> List[GrupoAsignacion]:
-        # Todos los postulantes van directo a población general
-        return [GrupoAsignacion.POBLACION_GENERAL]
-
 
 class ClasificacionPorSegmento(EstrategiaClasificacion):
     """
@@ -208,20 +183,6 @@ class DesempateSENESCYT(EstrategiaDesempate):
             orden_asc.append(True)
         
         return postulantes.sort_values(columnas_orden, ascending=orden_asc)
-
-
-class DesempatePorPuntaje(EstrategiaDesempate):
-    """
-    Desempate simple: Solo ordena por puntaje.
-    
-    Útil para procesos simplificados o cuando no hay
-    datos adicionales de desempate.
-    """
-    
-    def resolver(self, postulantes: pd.DataFrame) -> pd.DataFrame:
-        if postulantes.empty:
-            return postulantes
-        return postulantes.sort_values('PUNTAJE_POSTULACION', ascending=False)
 
 
 class DesempatePorPrioridad(EstrategiaDesempate):

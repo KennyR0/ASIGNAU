@@ -6,7 +6,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, List, Any, Tuple
 import shutil
-from Asignacion import MotorAsignacion, Reporte
+from Asignacion import MotorAsignacion
+from Reportes import Reporte
 
 # PATRÓN STATE - ENUMERACIONES DE ESTADO (Comportamiento)
 
@@ -99,6 +100,7 @@ class PeriodoAsignacion:
     archivo_oferta: Optional[str] = None
     archivo_postulantes: Optional[str] = None
     archivo_asignaciones: Optional[str] = None
+    archivo_matriz_asignacion: Optional[str] = None  # Matriz de asignación generada
     
     # Estadísticas globales
     total_cupos_ofertados: int = 0
@@ -114,6 +116,10 @@ class PeriodoAsignacion:
     # Carpeta de almacenamiento
     CARPETA_PERIODOS = "Periodos"
     
+    # Nombres de hojas conocidas para archivos de postulantes
+    HOJAS_POSTULANTES = ['6.BD_Postulantes', 'BD_Postulantes', 'Postulantes', 'POSTULANTES']
+    COLUMNAS_REQUERIDAS_POSTULANTES = ['IDENTIFICACIÓN', 'PUNTAJE_POSTULACION', 'CUS_ID']
+    
     def __post_init__(self):
         if not self.nombre:
             self.nombre = f"Periodo Académico {self.codigo}"
@@ -125,6 +131,61 @@ class PeriodoAsignacion:
         if not os.path.exists(carpeta):
             os.makedirs(carpeta)
         self._carpeta = carpeta
+    
+    @classmethod
+    def _leer_postulantes_excel(cls, ruta_archivo: str) -> Optional[pd.DataFrame]:
+        """
+        Lee el archivo Excel de postulantes, buscando automáticamente la hoja correcta.
+        Maneja archivos con múltiples hojas y diferentes formatos.
+        """
+        try:
+            xl = pd.ExcelFile(ruta_archivo)
+            hojas = xl.sheet_names
+            
+            # 1. Buscar hoja por nombre conocido
+            for hoja_conocida in cls.HOJAS_POSTULANTES:
+                if hoja_conocida in hojas:
+                    # Intentar con skiprows=1 primero (encabezado en fila 1)
+                    df = pd.read_excel(xl, sheet_name=hoja_conocida, skiprows=1)
+                    if cls._validar_columnas_postulantes(df):
+                        print(f"    Postulantes cargados desde hoja '{hoja_conocida}' con skiprows=1")
+                        return df
+                    
+                    # Intentar sin skiprows
+                    df = pd.read_excel(xl, sheet_name=hoja_conocida)
+                    if cls._validar_columnas_postulantes(df):
+                        print(f"    Postulantes cargados desde hoja '{hoja_conocida}'")
+                        return df
+            
+            # 2. Buscar en todas las hojas la que tenga las columnas correctas
+            for hoja in hojas:
+                for skiprows in [1, 0, 2]:
+                    try:
+                        df = pd.read_excel(xl, sheet_name=hoja, skiprows=skiprows)
+                        if cls._validar_columnas_postulantes(df):
+                            print(f" Postulantes cargados desde hoja '{hoja}' con skiprows={skiprows}")
+                            return df
+                    except:
+                        continue
+            
+            # 3. Si no encontramos, intentar la primera hoja
+            df = pd.read_excel(ruta_archivo)
+            if cls._validar_columnas_postulantes(df):
+                return df
+            
+            print(f"No se encontró una hoja válida con columnas de postulantes")
+            return pd.read_excel(ruta_archivo)  # Retornar algo por defecto
+            
+        except Exception as e:
+            print(f"Error leyendo postulantes: {e}")
+            return None
+    
+    @classmethod
+    def _validar_columnas_postulantes(cls, df: pd.DataFrame) -> bool:
+        """Valida que el DataFrame tenga las columnas requeridas para postulantes"""
+        if df is None or df.empty:
+            return False
+        return all(col in df.columns for col in cls.COLUMNAS_REQUERIDAS_POSTULANTES)
     
     #GESTIÓN DE ESTADO 
     
@@ -213,28 +274,17 @@ class PeriodoAsignacion:
             if not os.path.exists(ruta_archivo):
                 return False, f"El archivo no existe: {ruta_archivo}"
             
-            # Intentar leer el archivo
-            df = pd.read_excel(ruta_archivo, sheet_name=0, skiprows=1)
+            # Usar el método inteligente para leer postulantes
+            df = self._leer_postulantes_excel(ruta_archivo)
+            
+            if df is None or df.empty:
+                return False, "No se pudo leer el archivo de postulantes"
             
             # Validar columnas requeridas
-            columnas_requeridas = ['IDENTIFICACIÓN', 'PUNTAJE_POSTULACION', 'CUS_ID']
-            columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
+            columnas_faltantes = [col for col in self.COLUMNAS_REQUERIDAS_POSTULANTES if col not in df.columns]
             
             if columnas_faltantes:
-                # Intentar otras hojas o sin skiprows
-                df = pd.read_excel(ruta_archivo, sheet_name=0)
-                columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
-                
-                if columnas_faltantes:
-                    # Intentar hoja de postulantes (índice 5 como estaba antes)
-                    try:
-                        df = pd.read_excel(ruta_archivo, sheet_name=5, skiprows=1)
-                        columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
-                    except:
-                        pass
-                
-                if columnas_faltantes:
-                    return False, f"Columnas faltantes en el archivo: {', '.join(columnas_faltantes)}"
+                return False, f"Columnas faltantes en el archivo: {', '.join(columnas_faltantes)}. Columnas encontradas: {list(df.columns)[:10]}"
             
             # Copiar archivo a carpeta del periodo
             nombre_destino = os.path.join(self._carpeta, "Postulantes.xlsx")
@@ -247,7 +297,7 @@ class PeriodoAsignacion:
             self._actualizar_estado_carga()
             self.guardar()
             
-            return True, f"Postulantes cargados: {self.total_postulantes} postulantes únicos"
+            return True, f"Postulantes cargados: {self.total_postulantes} postulantes únicos, {len(df)} postulaciones totales"
             
         except Exception as e:
             return False, f"Error al cargar Postulantes: {str(e)}"
@@ -295,7 +345,6 @@ class PeriodoAsignacion:
             asignaciones_acumuladas = []
             postulantes_asignados = set()
             
-            # Ejecutar asignación (UNA SOLA VEZ para evitar asignar más cupos de los disponibles)
             # Las "vueltas" adicionales son para reasignaciones cuando hay cupos liberados
             num_vuelta = 1
             if callback_progreso:
@@ -350,7 +399,7 @@ class PeriodoAsignacion:
             # VALIDACIÓN CRÍTICA: Verificar que no se asignaron más cupos que disponibles
             total_cupos_disponibles = self.total_cupos_ofertados
             if estadisticas_totales['total_asignados'] > total_cupos_disponibles:
-                print(f"\n⚠️ ALERTA: Se detectaron {estadisticas_totales['total_asignados']} asignados pero solo hay {total_cupos_disponibles} cupos")
+                print(f"\nALERTA: Se detectaron {estadisticas_totales['total_asignados']} asignados pero solo hay {total_cupos_disponibles} cupos")
                 print("   Este error NO debería ocurrir. Revisar lógica de asignación.")
             
             # Consolidar asignaciones
@@ -370,8 +419,37 @@ class PeriodoAsignacion:
                 self.archivo_asignaciones = os.path.join(self._carpeta, "Asignaciones.xlsx")
                 self._asignaciones_df.to_excel(self.archivo_asignaciones, index=False)
                 
-                # También guardar en la raíz para compatibilidad
-                self._asignaciones_df.to_excel("Asignaciones.xlsx", index=False)
+                # También guardar en la raíz para compatibilidad (ignorar error si está bloqueado)
+                try:
+                    self._asignaciones_df.to_excel("Asignaciones.xlsx", index=False)
+                except PermissionError:
+                    if callback_progreso:
+                        callback_progreso("⚠ No se pudo actualizar Asignaciones.xlsx en raíz (archivo en uso)")
+                
+                # GENERAR MATRIZ DE ASIGNACIÓN
+                if callback_progreso:
+                    callback_progreso("\nGenerando matriz de asignación...")
+                
+                try:
+                    reporte = Reporte(carpeta_reportes=self._carpeta)
+                    resultado_matriz = reporte.generar_matriz_asignacion(
+                        asignaciones_df=self._asignaciones_df,
+                        oferta_df=self._oferta_df,
+                        postulantes_df=self._postulantes_df,
+                        carpeta_periodo=self._carpeta
+                    )
+                    
+                    if resultado_matriz.get('exito'):
+                        self.archivo_matriz_asignacion = resultado_matriz.get('archivo')
+                        estadisticas_totales['archivo_matriz'] = self.archivo_matriz_asignacion
+                        if callback_progreso:
+                            callback_progreso(f"✓ Matriz de asignación generada: {os.path.basename(self.archivo_matriz_asignacion)}")
+                    else:
+                        if callback_progreso:
+                            callback_progreso(f"⚠ Error generando matriz: {resultado_matriz.get('error', 'Error desconocido')}")
+                except Exception as e:
+                    if callback_progreso:
+                        callback_progreso(f"⚠ No se pudo generar la matriz de asignación: {str(e)}")
                 
                 # Calcular estadísticas por grupo
                 for grupo in self._asignaciones_df['grupo'].unique():
@@ -464,6 +542,7 @@ class PeriodoAsignacion:
             'archivo_oferta': self.archivo_oferta,
             'archivo_postulantes': self.archivo_postulantes,
             'archivo_asignaciones': self.archivo_asignaciones,
+            'archivo_matriz_asignacion': self.archivo_matriz_asignacion,
             'total_cupos_ofertados': self.total_cupos_ofertados,
             'total_postulantes': self.total_postulantes,
             'total_asignados': self.total_asignados,
@@ -521,6 +600,7 @@ class PeriodoAsignacion:
                 archivo_oferta=datos['archivo_oferta'],
                 archivo_postulantes=datos['archivo_postulantes'],
                 archivo_asignaciones=datos['archivo_asignaciones'],
+                archivo_matriz_asignacion=datos.get('archivo_matriz_asignacion'),
                 total_cupos_ofertados=datos['total_cupos_ofertados'],
                 total_postulantes=datos['total_postulantes'],
                 total_asignados=datos['total_asignados'],
@@ -531,7 +611,8 @@ class PeriodoAsignacion:
             if periodo.archivo_oferta and os.path.exists(periodo.archivo_oferta):
                 periodo._oferta_df = pd.read_excel(periodo.archivo_oferta)
             if periodo.archivo_postulantes and os.path.exists(periodo.archivo_postulantes):
-                periodo._postulantes_df = pd.read_excel(periodo.archivo_postulantes)
+                # Intentar cargar la hoja correcta de postulantes
+                periodo._postulantes_df = cls._leer_postulantes_excel(periodo.archivo_postulantes)
             if periodo.archivo_asignaciones and os.path.exists(periodo.archivo_asignaciones):
                 periodo._asignaciones_df = pd.read_excel(periodo.archivo_asignaciones)
             

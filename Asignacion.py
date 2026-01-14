@@ -1,83 +1,14 @@
 import pandas as pd
 from typing import Optional, Dict, List, Set
-from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
-import os
-
-# IMPORTAR CLASES DESDE MÓDULOS ESPECIALIZADOS
-
-# Estrategias (Strategy Pattern)
-from Estrategias import (
-    GrupoAsignacion,
-    EstrategiaClasificacion,
-    EstrategiaDesempate, 
+from Estrategias import (GrupoAsignacion, EstrategiaClasificacion,EstrategiaDesempate, 
     EstrategiaSegmentacion,
     ClasificacionSENESCYT,
     DesempateSENESCYT,
     SegmentacionPorcentual,
     SegmentacionInstitutos
 )
-
-# Observadores (Observer Pattern)
 from Observadores import ObservadorAsignacion
-
-# Reportes
-from Reportes import Reporte
-# ENUMERACIÓN DE ESTADO DE CUPO
-
-class EstadoCupo(Enum):
-    """Estados posibles de un cupo"""
-    DISPONIBLE = "DISPONIBLE"
-    ASIGNADO = "ASIGNADO"
-    ACEPTADO = "ACEPTADO"
-    LIBERADO = "LIBERADO"
-
-
-# 
-# CLASE CUPO (Dataclass)
-# 
-
-@dataclass
-class Cupo:
-    """
-    Representa un cupo disponible en una carrera.
-    Usa @dataclass para reducir boilerplate.
-    """
-    id_cupo: str
-    ofa_id: str
-    cus_id: str
-    carrera: str
-    total_cupos: int
-    grupo: GrupoAsignacion
-    estado: EstadoCupo = EstadoCupo.DISPONIBLE
-    postulante_asignado: Optional[str] = None
-    
-    def asignar(self, identificacion_postulante: str) -> bool:
-        """Asigna el cupo a un postulante"""
-        if self.estado == EstadoCupo.DISPONIBLE:
-            self.estado = EstadoCupo.ASIGNADO
-            self.postulante_asignado = identificacion_postulante
-            return True
-        return False
-    
-    def liberar(self) -> None:
-        """Libera el cupo"""
-        self.estado = EstadoCupo.DISPONIBLE
-        self.postulante_asignado = None
-    
-    def aceptar(self) -> bool:
-        """Marca el cupo como aceptado"""
-        if self.estado == EstadoCupo.ASIGNADO:
-            self.estado = EstadoCupo.ACEPTADO
-            return True
-        return False
-    
-    def esta_disponible(self) -> bool:
-        """Verifica si el cupo está disponible"""
-        return self.estado == EstadoCupo.DISPONIBLE
-
-
 
 # MOTOR DE ASIGNACIÓN (Strategy + Observer + Dependency Inversion)
 class MotorAsignacion:
@@ -237,51 +168,40 @@ class MotorAsignacion:
     
     def validar_porcentajes(self) -> bool:
         """
-        Valida que los porcentajes cumplan con los límites del SENESCYT
+        Valida que los porcentajes cumplan con los límites del SENESCYT.
+        Retorna True si son válidos, False si hay errores.
         """
-        errores = []
-        advertencias = []
-        
         # Validar límites según Art. 52 (IES públicas)
         if not self.es_instituto:
             # Política de cuotas: entre 5% y 10%
             if not (0.05 <= self.porcentajes.get('politica_cuotas', 0) <= 0.10):
-                advertencias.append("Política de cuotas debe estar entre 5% y 10%")
+                return False
             
             # Vulnerabilidad: al menos 10%
             if self.porcentajes.get('vulnerabilidad', 0) < 0.10:
-                advertencias.append("Vulnerabilidad debe ser al menos 10%")
+                return False
             
             # Mérito académico: al menos 20%
             if self.porcentajes.get('merito_academico', 0) < 0.20:
-                advertencias.append("Mérito académico debe ser al menos 20%")
+                return False
             
             # Otros reconocimientos: máximo 2%
             if self.porcentajes.get('otros_reconocimientos', 0) > 0.02:
-                advertencias.append("Otros reconocimientos no debe exceder 2%")
+                return False
             
             # Bachilleres pueblos: máximo 10%
             if self.porcentajes.get('bachilleres_pueblos', 0) > 0.10:
-                advertencias.append("Bachilleres pueblos no debe exceder 10%")
+                return False
             
             # Bachilleres último año: al menos 20%
             if self.porcentajes.get('bachilleres_ultimo', 0) < 0.20:
-                advertencias.append("Bachilleres último año debe ser al menos 20%")
+                return False
             
             # Población general: al menos 20%
             if self.porcentajes.get('poblacion_general', 0) < 0.20:
-                advertencias.append("Población general debe ser al menos 20%")
+                return False
         
-        # Los porcentajes deben sumar aproximadamente 100%
-        total = sum(self.porcentajes.values())
-        if total < 0.90 or total > 1.10:
-            advertencias.append(f"Los porcentajes suman {total*100:.1f}%, deberían sumar ~100%")
-        
-        # Mostrar advertencias
-        for adv in advertencias:
-            print(f"Advertencia Art. 52/53: {adv}")
-        
-        return len(errores) == 0
+        return True
     
     def segmentar_oferta(self):
         """
@@ -339,11 +259,11 @@ class MotorAsignacion:
         """Obtiene los postulantes que pertenecen a un grupo específico"""
                 # VALIDACIÓN: Verificar que tenemos los datos necesarios
         if self.postulaciones_df.empty:
-            print("⚠️  ERROR: DataFrame de postulaciones está vacío")
+            print("ERROR: DataFrame de postulaciones está vacío")
             return pd.DataFrame()
         
         if 'IDENTIFICACIÓN' not in self.postulaciones_df.columns:
-            print(f"⚠️  ERROR: Columna 'IDENTIFICACIÓN' no encontrada")
+            print(f"ERROR: Columna 'IDENTIFICACIÓN' no encontrada")
             print(f"Columnas disponibles: {list(self.postulaciones_df.columns)}")
             return pd.DataFrame()
         postulantes_grupo = []
@@ -384,7 +304,7 @@ class MotorAsignacion:
         
         # Validar que tenemos la columna IDENTIFICACIÓN
         if 'IDENTIFICACIÓN' not in postulantes_df.columns:
-            print(f"⚠️  ERROR en asignar_por_grupo ({grupo.name}): Columna IDENTIFICACIÓN no encontrada")
+            print(f"ERROR en asignar_por_grupo ({grupo.name}): Columna IDENTIFICACIÓN no encontrada")
             print(f"   Columnas disponibles: {list(postulantes_df.columns)[:5]}...")
             return
         
@@ -483,23 +403,28 @@ class MotorAsignacion:
         Asigna postulantes que aún no tienen cupo a cualquier carrera que tenga cupos disponibles.
         Esto asegura que se llenen todos los cupos posibles.
         """
-        # Obtener postulantes sin asignación, ordenados por puntaje
-        postulantes_sin_asignar = self.postulaciones_df[
-            ~self.postulaciones_df['IDENTIFICACIÓN'].astype(str).isin(self.postulantes_asignados)
-        ].copy()
+        # Obtener identificaciones únicas de postulantes sin asignación
+        todas_identificaciones = set(self.postulaciones_df['IDENTIFICACIÓN'].astype(str).unique())
+        identificaciones_sin_asignar = todas_identificaciones - self.postulantes_asignados
         
-        if postulantes_sin_asignar.empty:
+        if not identificaciones_sin_asignar:
             return
         
-        # Ordenar por puntaje descendente
-        if 'PUNTAJE_POSTULACION' in postulantes_sin_asignar.columns:
-            postulantes_sin_asignar = postulantes_sin_asignar.sort_values(
-                'PUNTAJE_POSTULACION', ascending=False
-            )
+        # Para cada postulante sin asignar, obtener su mejor puntaje
+        postulantes_info = []
+        for ident in identificaciones_sin_asignar:
+            postulaciones = self.postulaciones_df[
+                self.postulaciones_df['IDENTIFICACIÓN'].astype(str) == ident
+            ]
+            if not postulaciones.empty and 'PUNTAJE_POSTULACION' in postulaciones.columns:
+                puntaje = postulaciones['PUNTAJE_POSTULACION'].max()
+                postulantes_info.append((ident, puntaje))
         
-        for _, postulante in postulantes_sin_asignar.iterrows():
-            identificacion = str(postulante['IDENTIFICACIÓN'])
-            
+        # Ordenar por puntaje descendente
+        postulantes_info.sort(key=lambda x: x[1], reverse=True)
+        
+        asignados_en_ronda = 0
+        for identificacion, puntaje in postulantes_info:
             if identificacion in self.postulantes_asignados:
                 continue
             
@@ -511,17 +436,27 @@ class MotorAsignacion:
             if 'PRIORIDAD_ELECCION_CARRERA' in postulaciones_postulante.columns:
                 postulaciones_postulante = postulaciones_postulante.sort_values('PRIORIDAD_ELECCION_CARRERA')
             
-            # Intentar asignar a cualquier carrera con cupos
+            # Intentar asignar a cualquier carrera con cupos (revisar TODOS los grupos, no solo población general)
             for _, postulacion in postulaciones_postulante.iterrows():
                 cus_id = str(postulacion['CUS_ID'])
                 
                 if cus_id not in self.cupos_por_carrera:
                     continue
                 
-                # Verificar cupos disponibles en población general
-                cupos_disponibles = self.cupos_por_carrera[cus_id].get(GrupoAsignacion.POBLACION_GENERAL, 0)
+                # Verificar cupos disponibles en CUALQUIER grupo
+                total_cupos_disponibles = sum(self.cupos_por_carrera[cus_id].values())
                 
-                if cupos_disponibles > 0:
+                if total_cupos_disponibles > 0:
+                    # Encontrar el primer grupo con cupos disponibles
+                    grupo_asignacion = None
+                    for grupo in [GrupoAsignacion.POBLACION_GENERAL] + list(GrupoAsignacion):
+                        if self.cupos_por_carrera[cus_id].get(grupo, 0) > 0:
+                            grupo_asignacion = grupo
+                            break
+                    
+                    if grupo_asignacion is None:
+                        continue
+                    
                     ofa_id = self.ofa_id_por_carrera.get(cus_id, str(postulacion.get('OFA_ID', '')))
                     carrera = self.carrera_por_cus.get(cus_id, str(postulacion.get('NOMBRE_CARRERA', '')))
                     
@@ -530,16 +465,20 @@ class MotorAsignacion:
                         'cus_id': cus_id,
                         'ofa_id': ofa_id,
                         'carrera': carrera,
-                        'puntaje': float(postulante['PUNTAJE_POSTULACION']),
-                        'grupo': GrupoAsignacion.POBLACION_GENERAL.name,
+                        'puntaje': float(puntaje),
+                        'grupo': grupo_asignacion.name,
                         'prioridad': int(postulacion.get('PRIORIDAD_ELECCION_CARRERA', 1)),
                         'fecha_asignacion': datetime.now().strftime("%d/%m/%Y %H:%M"),
                         'estado': 'ASIGNADO'
                     })
                     
-                    self.cupos_por_carrera[cus_id][GrupoAsignacion.POBLACION_GENERAL] -= 1
+                    self.cupos_por_carrera[cus_id][grupo_asignacion] -= 1
                     self.postulantes_asignados.add(identificacion)
+                    asignados_en_ronda += 1
                     break
+        
+        if asignados_en_ronda > 0:
+            print(f"   ✓ Ronda adicional: {asignados_en_ronda} postulantes asignados")
     
     def ejecutar_asignacion(self) -> pd.DataFrame:
         """
@@ -554,8 +493,9 @@ class MotorAsignacion:
         5. Validar que no se asignaron más que los disponibles
         6. Retornar resultados
         """
-        # Validar porcentajes
-        self.validar_porcentajes()
+        # Validar porcentajes - detener si no cumplen límites
+        if not self.validar_porcentajes():
+            raise ValueError("Porcentajes incorrectos: no cumplen con los limites del SENESCYT")
         
         # 1. Segmentar la oferta
         self.segmentar_oferta()
@@ -583,6 +523,21 @@ class MotorAsignacion:
         # 5.1 SEGUNDA PASADA: Intentar asignar postulantes restantes a cualquier carrera con cupos
         # Esto cubre el caso donde un postulante no obtuvo su primera opción
         self._asignar_restantes_a_cupos_disponibles()
+        
+        # DIAGNÓSTICO: Mostrar cupos restantes
+        cupos_restantes_total = sum(
+            sum(cupos.values()) 
+            for cupos in self.cupos_por_carrera.values()
+        )
+        postulantes_sin_asignar = len(set(self.postulaciones_df['IDENTIFICACIÓN'].astype(str).unique()) - self.postulantes_asignados)
+        
+        if cupos_restantes_total > 0:
+            print(f"\nDIAGNÓSTICO DE ASIGNACIÓN:")
+            print(f"   Cupos restantes sin usar: {cupos_restantes_total}")
+            print(f"   Postulantes sin asignación: {postulantes_sin_asignar}")
+            
+            if postulantes_sin_asignar > 0 and cupos_restantes_total > 0:
+                print(f"   NOTA: Hay cupos disponibles pero los postulantes restantes no postularon a esas carreras")
         
         # 6. VALIDACIÓN CRÍTICA: Verificar que no se asignaron más cupos que disponibles
         df_asignaciones = pd.DataFrame(self.asignaciones)

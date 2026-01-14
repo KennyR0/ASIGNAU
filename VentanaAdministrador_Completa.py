@@ -1,8 +1,12 @@
-from Backend_Completo import (Administrador, Reporte, EstadoPeriodo)
+from Backend_Completo import Administrador
+from Reportes import Reporte
+from PeriodoAsignacion import EstadoPeriodo
 import tkinter as tk
 from tkinter import messagebox, ttk, scrolledtext, filedialog
 import pandas as pd
 from datetime import datetime
+import os
+import subprocess
 
 
 class VentanaAdministrador:
@@ -15,6 +19,9 @@ class VentanaAdministrador:
         
         # Periodo activo
         self.periodo_activo = None
+        
+        # Archivo de matriz de asignación actual
+        self.archivo_matriz_actual = None
         
         self.ventana.title("Panel de Administrador - ASIGNAU")
         self.ventana.geometry("1100x750")
@@ -34,7 +41,6 @@ class VentanaAdministrador:
         self.crear_pestana_periodos()
         self.crear_pestana_asignacion()
         self.crear_pestana_reportes()
-        self.crear_pestana_consultas()
         
         # Botón cerrar sesión
         frame_inferior = tk.Frame(ventana, bg="white")
@@ -122,6 +128,23 @@ class VentanaAdministrador:
             else:
                 self.label_estado_postulantes.config(text="✗ No cargado", fg="red")
         
+        # Actualizar estado de matriz de asignación
+        if hasattr(self, 'label_matriz_estado') and hasattr(self, 'btn_abrir_matriz'):
+            if self.periodo_activo and self.periodo_activo.archivo_matriz_asignacion:
+                if os.path.exists(self.periodo_activo.archivo_matriz_asignacion):
+                    self.archivo_matriz_actual = self.periodo_activo.archivo_matriz_asignacion
+                    self.label_matriz_estado.config(
+                        text="✓ Matriz de asignación disponible",
+                        fg="#4CAF50"
+                    )
+                    self.btn_abrir_matriz.pack(side=tk.LEFT, padx=10)
+                else:
+                    self.label_matriz_estado.config(text="", fg="#666666")
+                    self.btn_abrir_matriz.pack_forget()
+            else:
+                self.label_matriz_estado.config(text="", fg="#666666")
+                self.btn_abrir_matriz.pack_forget()
+        
         # Actualizar resumen en pestaña inicio
         if hasattr(self, 'texto_resumen_periodo'):
             self._actualizar_resumen_periodo()
@@ -157,8 +180,7 @@ class VentanaAdministrador:
             ("Gestionar Periodos", self.ir_a_periodos, "#9C27B0"),
             ("Cargar Archivos", self.ir_a_asignacion, "#2196F3"),
             ("Ejecutar Asignación", self._ejecutar_desde_inicio, "#4CAF50"),
-            ("Ver Reportes", self.ir_a_reportes, "#FF9800"),
-            ("Consultar Postulantes", self.ir_a_consultas, "#607D8B")
+            ("Ver Reportes", self.ir_a_reportes, "#FF9800")
         ]
         
         for texto, comando, color in botones:
@@ -553,8 +575,32 @@ class VentanaAdministrador:
         
         self.texto_resultado = scrolledtext.ScrolledText(frame_resultado, 
                                                          font=("Courier", 9), 
-                                                         height=12)
-        self.texto_resultado.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+                                                         height=10)
+        self.texto_resultado.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        # Frame para mensaje de matriz de asignación
+        self.frame_matriz_info = tk.Frame(frame_resultado, bg="white")
+        self.frame_matriz_info.pack(fill=tk.X, padx=10, pady=5)
+        
+        self.label_matriz_estado = tk.Label(
+            self.frame_matriz_info, 
+            text="", 
+            font=("Arial", 10), 
+            bg="white", 
+            fg="#4CAF50"
+        )
+        self.label_matriz_estado.pack(side=tk.LEFT, padx=5)
+        
+        self.btn_abrir_matriz = tk.Button(
+            self.frame_matriz_info, 
+            text="Abrir Matriz de Asignación", 
+            font=("Arial", 10), 
+            bg="#2196F3", 
+            fg="white",
+            command=self.abrir_matriz_asignacion
+        )
+        # Inicialmente oculto
+        self.btn_abrir_matriz.pack_forget()
         
         # Actualizar estado inicial
         self._actualizar_estado_interfaz()
@@ -689,6 +735,23 @@ class VentanaAdministrador:
                     for grupo, cantidad in estadisticas['por_grupo'].items():
                         self.texto_resultado.insert(tk.END, f"  {grupo}: {cantidad}\n")
                 
+                # Mostrar información de la matriz de asignación
+                if estadisticas.get('archivo_matriz'):
+                    self.archivo_matriz_actual = estadisticas['archivo_matriz']
+                    self.label_matriz_estado.config(
+                        text="✓ Matriz de asignación generada exitosamente",
+                        fg="#4CAF50"
+                    )
+                    self.btn_abrir_matriz.pack(side=tk.LEFT, padx=10)
+                    self.texto_resultado.insert(tk.END, f"\nMatriz generada: {os.path.basename(self.archivo_matriz_actual)}\n")
+                elif self.periodo_activo and self.periodo_activo.archivo_matriz_asignacion:
+                    self.archivo_matriz_actual = self.periodo_activo.archivo_matriz_asignacion
+                    self.label_matriz_estado.config(
+                        text="✓ Matriz de asignación generada exitosamente",
+                        fg="#4CAF50"
+                    )
+                    self.btn_abrir_matriz.pack(side=tk.LEFT, padx=10)
+                
                 messagebox.showinfo("Exito", mensaje)
             else:
                 self.texto_resultado.insert(tk.END, f"\n[ERROR] {mensaje}\n")
@@ -736,38 +799,6 @@ class VentanaAdministrador:
                                                        font=("Courier", 9), 
                                                        height=20)
         self.texto_reporte.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-    
-    def crear_pestana_consultas(self):
-        """Pestana para consultas de postulantes"""
-        frame = tk.Frame(self.notebook, bg="white")
-        self.notebook.add(frame, text="Consultas")
-        
-        tk.Label(frame, text="Consultar Postulantes", 
-                font=("Arial", 16, "bold"), bg="white").pack(pady=20)
-        
-        # Búsqueda
-        busqueda_frame = tk.Frame(frame, bg="white")
-        busqueda_frame.pack(pady=10)
-        
-        tk.Label(busqueda_frame, text="Identificacion:", 
-                font=("Arial", 11), bg="white").grid(row=0, column=0, padx=10)
-        
-        self.entry_busqueda = tk.Entry(busqueda_frame, font=("Arial", 11), width=25)
-        self.entry_busqueda.grid(row=0, column=1, padx=10)
-        
-        tk.Button(busqueda_frame, text="Buscar", font=("Arial", 11), 
-                 bg="#2196F3", fg="white", width=15,
-                 command=self.buscar_postulante).grid(row=0, column=2, padx=10)
-        
-        # Resultados
-        resultado_frame = tk.LabelFrame(frame, text="Resultados de Busqueda", 
-                                       font=("Arial", 12, "bold"), bg="white")
-        resultado_frame.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
-        
-        self.texto_consulta = scrolledtext.ScrolledText(resultado_frame, 
-                                                        font=("Courier", 9), 
-                                                        height=20)
-        self.texto_consulta.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
     
     # ============== Metodos de Reportes ==============
     
@@ -863,40 +894,35 @@ class VentanaAdministrador:
         except:
             return None
     
-    def buscar_postulante(self):
-        """Busca informacion de un postulante"""
-        identificacion = self.entry_busqueda.get().strip()
+    def abrir_matriz_asignacion(self):
+        """Abre el archivo Excel de la matriz de asignación"""
+        archivo = None
         
-        if not identificacion:
-            messagebox.showwarning("Advertencia", "Ingrese una identificacion")
-            return
+        # Primero intentar con el archivo actual
+        if self.archivo_matriz_actual and os.path.exists(self.archivo_matriz_actual):
+            archivo = self.archivo_matriz_actual
+        # Luego intentar con el periodo activo
+        elif self.periodo_activo and self.periodo_activo.archivo_matriz_asignacion:
+            if os.path.exists(self.periodo_activo.archivo_matriz_asignacion):
+                archivo = self.periodo_activo.archivo_matriz_asignacion
         
-        try:
-            df_asignaciones = self._obtener_asignaciones()
-            
-            self.texto_consulta.delete(1.0, tk.END)
-            
-            if df_asignaciones is None or df_asignaciones.empty:
-                self.texto_consulta.insert(tk.END, "No hay datos de asignaciones disponibles\n")
-                return
-            
-            resultado = df_asignaciones[df_asignaciones['identificacion'] == identificacion]
-            
-            if resultado.empty:
-                self.texto_consulta.insert(tk.END, f"No se encontraron asignaciones para: {identificacion}\n")
-            else:
-                self.texto_consulta.insert(tk.END, f"=== INFORMACION DEL POSTULANTE ===\n\n")
-                self.texto_consulta.insert(tk.END, f"Identificacion: {identificacion}\n")
-                self.texto_consulta.insert(tk.END, f"Carrera: {resultado.iloc[0]['carrera']}\n")
-                self.texto_consulta.insert(tk.END, f"Puntaje: {resultado.iloc[0]['puntaje']}\n")
-                self.texto_consulta.insert(tk.END, f"Grupo: {resultado.iloc[0]['grupo']}\n")
-                self.texto_consulta.insert(tk.END, f"Estado: {resultado.iloc[0]['estado']}\n")
-                self.texto_consulta.insert(tk.END, f"Fecha Asignacion: {resultado.iloc[0]['fecha_asignacion']}\n")
-                if 'vuelta' in resultado.columns:
-                    self.texto_consulta.insert(tk.END, f"Vuelta de Asignacion: {resultado.iloc[0]['vuelta']}\n")
-                
-        except Exception as e:
-            messagebox.showerror("Error", f"Error en busqueda: {str(e)}")
+        if archivo:
+            try:
+                # Abrir el archivo con la aplicación predeterminada (Windows)
+                os.startfile(archivo)
+            except AttributeError:
+                # Para sistemas no-Windows
+                try:
+                    subprocess.run(['open', archivo], check=True)  # macOS
+                except:
+                    try:
+                        subprocess.run(['xdg-open', archivo], check=True)  # Linux
+                    except Exception as e:
+                        messagebox.showerror("Error", f"No se pudo abrir el archivo: {str(e)}")
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudo abrir el archivo: {str(e)}")
+        else:
+            messagebox.showwarning("Advertencia", "No hay matriz de asignación generada")
     
     # ============== Metodos de navegacion ==============
     
@@ -908,9 +934,6 @@ class VentanaAdministrador:
     
     def ir_a_reportes(self):
         self.notebook.select(3)
-    
-    def ir_a_consultas(self):
-        self.notebook.select(4)
     
     def cerrar_sesion(self):
         """Cierra la sesion y vuelve a la ventana principal"""

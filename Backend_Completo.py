@@ -3,10 +3,11 @@ from abc import abstractmethod, ABC
 from typing import Optional, Dict, Any, List, Tuple, Protocol, runtime_checkable
 import os
 from dataclasses import dataclass, field
-from Asignacion import (MotorAsignacion, Reporte,
+from Asignacion import (MotorAsignacion,
                         EstrategiaClasificacion, EstrategiaDesempate, EstrategiaSegmentacion,
                         ClasificacionSENESCYT, DesempateSENESCYT, SegmentacionPorcentual)
-from PeriodoAsignacion import (PeriodoAsignacion, EstadoPeriodo, GestorPeriodos)
+from Reportes import Reporte
+from PeriodoAsignacion import (PeriodoAsignacion, GestorPeriodos)
 
 
 # INTERFACE PARA GESTIÓN DE PERIODOS (DIP)
@@ -108,80 +109,6 @@ class BD_USUARIO(Base_Dato):
             return usuario.iloc[0].to_dict()
         return None
 
-class BD_POSTULACIONES:
-    """Maneja la base de datos de postulaciones"""
-    
-    @staticmethod
-    def cargar_postulaciones():
-        # Intentar cargar desde el periodo activo primero
-        gestor = GestorPeriodos()
-        periodo = gestor.obtener_periodo_activo()
-        
-        if periodo and periodo.archivo_postulantes:
-            excel = periodo.archivo_postulantes
-            if os.path.exists(excel):
-                return pd.read_excel(excel, sheet_name=5, skiprows=1)
-        
-        # Fallback: archivo en la raíz
-        excel = "Postulantes.xlsx"
-        if os.path.exists(excel):
-            return pd.read_excel(excel, sheet_name=5, skiprows=1)
-        return None
-    
-    @staticmethod
-    def cargar_oferta_academica():
-        # Intentar cargar desde el periodo activo primero
-        gestor = GestorPeriodos()
-        periodo = gestor.obtener_periodo_activo()
-        
-        if periodo and periodo.archivo_oferta:
-            excel = periodo.archivo_oferta
-            if os.path.exists(excel):
-                return pd.read_excel(excel, sheet_name=0, skiprows=1)
-        
-        # Fallback: archivo en la raíz
-        excel = "Oferta_Academica.xlsx"
-        if os.path.exists(excel):
-            return pd.read_excel(excel, sheet_name=0, skiprows=1)
-        return None
-    
-    @staticmethod
-    def cargar_asignaciones():
-        """Carga las asignaciones del periodo activo"""
-        # Intentar cargar desde el periodo activo primero
-        gestor = GestorPeriodos()
-        periodo = gestor.obtener_periodo_activo()
-        
-        if periodo and periodo.archivo_asignaciones:
-            excel = periodo.archivo_asignaciones
-            if os.path.exists(excel):
-                return pd.read_excel(excel)
-        
-        # Buscar en periodos disponibles
-        periodos = PeriodoAsignacion.listar_periodos()
-        for p in periodos:
-            if p['estado'] in ['FINALIZADO', 'EN_PROCESO']:
-                periodo_cargado = PeriodoAsignacion.cargar(p['codigo'])
-                if periodo_cargado and periodo_cargado.archivo_asignaciones:
-                    excel = periodo_cargado.archivo_asignaciones
-                    if os.path.exists(excel):
-                        return pd.read_excel(excel)
-        
-        # Fallback: archivo en la raíz
-        excel = "Asignaciones.xlsx"
-        if os.path.exists(excel):
-            return pd.read_excel(excel)
-        return None
-    
-    @staticmethod
-    def guardar_asignaciones(df_asignaciones, archivo="Asignaciones.xlsx"):
-        """Guarda las asignaciones en un archivo Excel"""
-        try:
-            df_asignaciones.to_excel(archivo, index=False)
-            return True
-        except Exception as e:
-            print(f"Error al guardar asignaciones: {e}")
-            return False
 
 # CONTEXTO DE AUTENTICACIÓN (Single Responsibility Principle)
 class IniciarSesion:
@@ -210,8 +137,6 @@ class Usuario(ABC):
 # CLASE ADMINISTRADOR (Herencia + Polimorfismo + DIP)
 @dataclass
 class Administrador(Usuario):
-    Periodo = "2025 - 2"
-    
     identificacion: str = ""
     nombre: str = ""
     cedula: str = ""
@@ -250,8 +175,7 @@ class Administrador(Usuario):
             'identificacion': self.identificacion,
             'nombre': self.nombre,
             'cedula': self.cedula,
-            'id': self.id,
-            'periodo': self.Periodo
+            'id': self.id
         }
     
     def obtener_identificacion(self) -> str:
@@ -337,34 +261,96 @@ class Administrador(Usuario):
 #CLASE POSTULANTE
 @dataclass
 class Postulante(Usuario):
+    """
+    Representa un postulante en el sistema.
+    Aplica encapsulamiento con @property para datos sensibles.
+    """
     identificacion: str = ""
-    contraseña: str = ""
     fecha_postulacion: str = ""
-    puntaje_postulacion: float = 0.0
     segmento_aspirante: int = 0
     instancia_postulacion: int = 0
     prioridad_carrera: int = 0
     nombre_carrera: str = ""
     ofa_id: str = ""
     cus_id: str = ""
-    cupo_asignado: bool = False
-    estado_cupo: str = ""
+    
+    # Atributos privados (encapsulamiento)
+    _contraseña: str = field(default="", repr=False)  # No mostrar en repr
+    _puntaje_postulacion: float = field(default=0.0)
+    _cupo_asignado: bool = field(default=False)
+    _estado_cupo: str = field(default="")
+    
+    #PROPIEDADES CON ENCAPSULAMIENTO 
+    
+    @property
+    def puntaje_postulacion(self) -> float:
+        """Getter para puntaje (solo lectura controlada)"""
+        return self._puntaje_postulacion
+    
+    @puntaje_postulacion.setter
+    def puntaje_postulacion(self, valor: float):
+        """Setter con validación de rango"""
+        if not isinstance(valor, (int, float)):
+            raise TypeError("El puntaje debe ser numérico")
+        if valor < 0:
+            raise ValueError("El puntaje no puede ser negativo")
+        self._puntaje_postulacion = float(valor)
+    
+    @property
+    def cupo_asignado(self) -> bool:
+        """Getter para estado de cupo asignado"""
+        return self._cupo_asignado
+    
+    @cupo_asignado.setter
+    def cupo_asignado(self, valor: bool):
+        """Setter con validación de tipo"""
+        if not isinstance(valor, bool):
+            raise TypeError("cupo_asignado debe ser booleano")
+        self._cupo_asignado = valor
+    
+    @property
+    def estado_cupo(self) -> str:
+        """Getter para estado del cupo"""
+        return self._estado_cupo
+    
+    @estado_cupo.setter
+    def estado_cupo(self, nuevo_estado: str):
+        """Setter con validación de transiciones válidas (State Pattern)"""
+        estados_validos = ["", "ASIGNADO", "ACEPTADO", "RECHAZADO", "LIBERADO"]
+        if nuevo_estado not in estados_validos:
+            raise ValueError(f"Estado inválido: {nuevo_estado}. Estados válidos: {estados_validos}")
+        # Validar transiciones
+        if self._estado_cupo == "ACEPTADO" and nuevo_estado != "ACEPTADO":
+            raise ValueError("Un cupo ACEPTADO no puede cambiar de estado")
+        self._estado_cupo = nuevo_estado
+    
+    @property
+    def contraseña(self) -> str:
+        """Getter para contraseña - retorna enmascarado por seguridad"""
+        return "****" if self._contraseña else ""
+    
+    @contraseña.setter
+    def contraseña(self, valor: str):
+        """Setter para contraseña"""
+        self._contraseña = str(valor)
     
     @classmethod
     def crear_desde_bd(cls, datos: Dict[str, Any]):
         """Factory Method para crear Postulante desde datos de BD"""
-        return cls(
+        postulante = cls(
             identificacion=str(datos.get("IDENTIFICACIÓN", "")),
-            contraseña=str(datos.get("CONTRASEÑA", "")),
             fecha_postulacion=str(datos.get("FECHA_POSTULACION", "")),
-            puntaje_postulacion=float(datos.get("PUNTAJE_POSTULACION", 0.0)),
-            segmento_aspirante=int(datos.get("SEGMENTO_ASPIRANTE", 0)),
-            instancia_postulacion=int(datos.get("INSTANCIA_POSTULACION", 0)),
-            prioridad_carrera=int(datos.get("PRIORIDAD_ELECCION_CARRERA", 0)),
+            segmento_aspirante=int(datos.get("SEGMENTO_ASPIRANTE", 0) or 0),
+            instancia_postulacion=int(datos.get("INSTANCIA_POSTULACION", 0) or 0),
+            prioridad_carrera=int(datos.get("PRIORIDAD_ELECCION_CARRERA", 0) or 0),
             nombre_carrera=str(datos.get("NOMBRE_CARRERA", "")),
             ofa_id=str(datos.get("OFA_ID", "")),
             cus_id=str(datos.get("CUS_ID", ""))
         )
+        # Usar setters para validación
+        postulante.contraseña = str(datos.get("CONTRASEÑA", ""))
+        postulante.puntaje_postulacion = float(datos.get("PUNTAJE_POSTULACION", 0.0) or 0.0)
+        return postulante
 
     def mostrar_informacion(self):
         """Polimorfismo: Implementación específica de Postulante"""
@@ -382,9 +368,6 @@ class Postulante(Usuario):
     def obtener_identificacion(self) -> str:
         """Implementación de la interfaz Usuario (Liskov Substitution)"""
         return self.identificacion
-
-    def ver_puntaje(self) -> float:
-        return self.puntaje_postulacion
     
     def obtener_postulaciones(self):
         return {
