@@ -10,7 +10,7 @@ from Estrategias import (GrupoAsignacion, EstrategiaClasificacion,EstrategiaDese
 )
 from Observadores import ObservadorAsignacion
 
-# MOTOR DE ASIGNACIÓN (Strategy + Observer + Dependency Inversion)
+# MOTOR DE ASIGNACIÓN 
 class MotorAsignacion:
     """
     Motor de asignación de cupos    
@@ -52,7 +52,7 @@ class MotorAsignacion:
         self.postulaciones_df = self._normalizar_columnas(postulaciones_df)
         self.es_instituto = es_instituto
         
-        # INYECCIÓN DE ESTRATEGIAS (Strategy + DIP) 
+        # INYECCIÓN DE ESTRATEGIAS 
         self._estrategia_clasificacion = estrategia_clasificacion or ClasificacionSENESCYT()
         self._estrategia_desempate = estrategia_desempate or DesempateSENESCYT()
         self._estrategia_segmentacion = estrategia_segmentacion or (
@@ -70,7 +70,7 @@ class MotorAsignacion:
         elif es_instituto:
             self.porcentajes = self.PORCENTAJES_INSTITUTOS.copy()
         else:
-            # Porcentajes por defecto para IES (usar valores intermedios)
+            # Porcentajes por defecto para IES 
             self.porcentajes = {
                 'politica_cuotas': 0.10,
                 'vulnerabilidad': 0.10,
@@ -95,15 +95,15 @@ class MotorAsignacion:
     #MÉTODOS PARA CAMBIAR ESTRATEGIAS EN RUNTIME
     
     def set_estrategia_clasificacion(self, estrategia: EstrategiaClasificacion):
-        """Permite cambiar la estrategia de clasificación en tiempo de ejecución (OCP)"""
+        """Permite cambiar la estrategia de clasificación en tiempo de ejecución """
         self._estrategia_clasificacion = estrategia
     
     def set_estrategia_desempate(self, estrategia: EstrategiaDesempate):
-        """Permite cambiar la estrategia de desempate en tiempo de ejecución (OCP)"""
+        """Permite cambiar la estrategia de desempate en tiempo de ejecución """
         self._estrategia_desempate = estrategia
     
     def set_estrategia_segmentacion(self, estrategia: EstrategiaSegmentacion):
-        """Permite cambiar la estrategia de segmentación en tiempo de ejecución (OCP)"""
+        """Permite cambiar la estrategia de segmentación en tiempo de ejecución """
         self._estrategia_segmentacion = estrategia
     
     #MÉTODOS DEL PATRÓN OBSERVER 
@@ -171,7 +171,7 @@ class MotorAsignacion:
         Valida que los porcentajes cumplan con los límites del SENESCYT.
         Retorna True si son válidos, False si hay errores.
         """
-        # Validar límites según Art. 52 (IES públicas)
+        # Validar límites
         if not self.es_instituto:
             # Política de cuotas: entre 5% y 10%
             if not (0.05 <= self.porcentajes.get('politica_cuotas', 0) <= 0.10):

@@ -345,56 +345,116 @@ class PeriodoAsignacion:
             asignaciones_acumuladas = []
             postulantes_asignados = set()
             
-            # Las "vueltas" adicionales son para reasignaciones cuando hay cupos liberados
-            num_vuelta = 1
+            # Obtener número máximo de vueltas desde configuración
+            max_vueltas = self.configuracion.max_vueltas_asignacion
+            
             if callback_progreso:
-                callback_progreso(f"\n=== EJECUTANDO ASIGNACIÓN ===")
+                callback_progreso(f"\n=== EJECUTANDO ASIGNACIÓN ({max_vueltas} VUELTAS) ===")
             
-            vuelta = VueltaAsignacion(
-                numero_vuelta=num_vuelta,
-                fecha_inicio=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            )
+            # Copiar oferta original para mantener cupos entre vueltas
+            oferta_actual = self._oferta_df.copy()
             
-            # Filtrar postulantes que ya tienen asignación
-            postulantes_disponibles = self._postulantes_df[
-                ~self._postulantes_df['IDENTIFICACIÓN'].astype(str).isin(postulantes_asignados)
-            ].copy()
-            
-            if not postulantes_disponibles.empty:
-                # Crear motor de asignación
+            # Ejecutar las vueltas configuradas
+            for num_vuelta in range(1, max_vueltas + 1):
+                if callback_progreso:
+                    callback_progreso(f"\n{'='*20} VUELTA {num_vuelta} de {max_vueltas} {'='*20}")
+                
+                vuelta = VueltaAsignacion(
+                    numero_vuelta=num_vuelta,
+                    fecha_inicio=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                )
+                
+                # Filtrar postulantes que ya tienen asignación
+                postulantes_disponibles = self._postulantes_df[
+                    ~self._postulantes_df['IDENTIFICACIÓN'].astype(str).isin(postulantes_asignados)
+                ].copy()
+                
+                # Calcular cupos disponibles restantes
+                cupos_disponibles = oferta_actual['CUPOS_OFERTADOS'].sum() if 'CUPOS_OFERTADOS' in oferta_actual.columns else 0
+                
+                if callback_progreso:
+                    callback_progreso(f"  Postulantes sin asignar: {len(postulantes_disponibles)}")
+                    callback_progreso(f"  Cupos disponibles: {cupos_disponibles}")
+                
+                # Verificar si hay postulantes y cupos disponibles
+                if postulantes_disponibles.empty:
+                    if callback_progreso:
+                        callback_progreso(f"  ✓ No hay más postulantes sin asignar")
+                    vuelta.fecha_fin = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    vuelta.completada = True
+                    vuelta.total_asignados = 0
+                    self.vueltas.append(vuelta)
+                    estadisticas_totales['vueltas_ejecutadas'] += 1
+                    estadisticas_totales['asignados_por_vuelta'].append(0)
+                    continue
+                
+                if cupos_disponibles <= 0:
+                    if callback_progreso:
+                        callback_progreso(f"  ✓ No hay más cupos disponibles")
+                    vuelta.fecha_fin = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    vuelta.completada = True
+                    vuelta.total_asignados = 0
+                    self.vueltas.append(vuelta)
+                    estadisticas_totales['vueltas_ejecutadas'] += 1
+                    estadisticas_totales['asignados_por_vuelta'].append(0)
+                    continue
+                
+                # Crear motor de asignación con la oferta actualizada
                 motor = MotorAsignacion(
-                    self._oferta_df,
+                    oferta_actual,
                     postulantes_disponibles,
                     self.configuracion.porcentajes,
                     self.configuracion.es_instituto
                 )
                 
-                # Ejecutar asignación
+                # Ejecutar asignación de esta vuelta
+                if callback_progreso:
+                    callback_progreso(f"  Ejecutando asignación...")
+                
                 df_asignaciones = motor.ejecutar_asignacion()
                 
+                nuevos_asignados = 0
                 if not df_asignaciones.empty:
                     # Registrar asignaciones
                     nuevos_asignados = len(df_asignaciones)
+                    
+                    # Agregar número de vuelta a las asignaciones
+                    df_asignaciones['vuelta'] = num_vuelta
                     asignaciones_acumuladas.append(df_asignaciones)
                     
                     # Actualizar postulantes asignados
                     postulantes_asignados.update(df_asignaciones['identificacion'].astype(str).tolist())
                     
+                    # Actualizar oferta para la siguiente vuelta (reducir cupos usados)
+                    oferta_actual = self._actualizar_oferta_disponible(oferta_actual, df_asignaciones)
+                    
                     # Actualizar vuelta
-                    vuelta.total_asignados = nuevos_asignados
                     vuelta.estadisticas = motor.obtener_estadisticas()
                     
-                    # Actualizar estadísticas
-                    estadisticas_totales['vueltas_ejecutadas'] += 1
-                    estadisticas_totales['asignados_por_vuelta'].append(nuevos_asignados)
+                    # Actualizar estadísticas totales
                     estadisticas_totales['total_asignados'] += nuevos_asignados
                     
                     if callback_progreso:
-                        callback_progreso(f"Asignados: {nuevos_asignados} postulantes")
+                        callback_progreso(f"  ✓ Asignados en vuelta {num_vuelta}: {nuevos_asignados} postulantes")
+                else:
+                    if callback_progreso:
+                        callback_progreso(f"  ⚠ No se realizaron asignaciones en esta vuelta")
+                
+                vuelta.total_asignados = nuevos_asignados
+                vuelta.fecha_fin = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                vuelta.completada = True
+                self.vueltas.append(vuelta)
+                
+                estadisticas_totales['vueltas_ejecutadas'] += 1
+                estadisticas_totales['asignados_por_vuelta'].append(nuevos_asignados)
             
-            vuelta.fecha_fin = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            vuelta.completada = True
-            self.vueltas.append(vuelta)
+            # Resumen de vueltas
+            if callback_progreso:
+                callback_progreso(f"\n{'='*50}")
+                callback_progreso(f"RESUMEN DE VUELTAS:")
+                for i, asignados in enumerate(estadisticas_totales['asignados_por_vuelta'], 1):
+                    callback_progreso(f"  Vuelta {i}: {asignados} asignados")
+                callback_progreso(f"{'='*50}")
                 
             # VALIDACIÓN CRÍTICA: Verificar que no se asignaron más cupos que disponibles
             total_cupos_disponibles = self.total_cupos_ofertados
@@ -406,14 +466,7 @@ class PeriodoAsignacion:
             if asignaciones_acumuladas:
                 self._asignaciones_df = pd.concat(asignaciones_acumuladas, ignore_index=True)
                 
-                # Agregar número de vuelta a cada asignación
-                vuelta_idx = 0
-                start_idx = 0
-                for v in self.vueltas:
-                    if v.total_asignados > 0:
-                        end_idx = start_idx + v.total_asignados
-                        self._asignaciones_df.loc[start_idx:end_idx-1, 'vuelta'] = v.numero_vuelta
-                        start_idx = end_idx
+                # El campo 'vuelta' ya está agregado en cada iteración
                 
                 # Guardar archivo de asignaciones
                 self.archivo_asignaciones = os.path.join(self._carpeta, "Asignaciones.xlsx")
@@ -487,6 +540,35 @@ class PeriodoAsignacion:
             self.estado = EstadoPeriodo.DATOS_CARGADOS  # Permitir reintentar
             self.guardar()
             return False, f"Error durante la asignación: {str(e)}", {}
+    
+    def _actualizar_oferta_disponible(self, oferta_df: pd.DataFrame, asignaciones_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Actualiza los cupos disponibles en la oferta después de una vuelta de asignación.
+        
+        Args:
+            oferta_df: DataFrame con la oferta académica actual
+            asignaciones_df: DataFrame con las asignaciones realizadas en esta vuelta
+            
+        Returns:
+            DataFrame con los cupos actualizados (restando los asignados)
+        """
+        oferta_actualizada = oferta_df.copy()
+        
+        # Contar asignaciones por carrera (CUS_ID)
+        if 'cus_id' in asignaciones_df.columns:
+            asignados_por_carrera = asignaciones_df.groupby('cus_id').size()
+            
+            # Actualizar cupos disponibles
+            for cus_id, cantidad_asignada in asignados_por_carrera.items():
+                # Buscar la carrera en la oferta
+                mask = oferta_actualizada['CUS_ID'].astype(str) == str(cus_id)
+                if mask.any():
+                    # Reducir los cupos disponibles
+                    cupos_actuales = oferta_actualizada.loc[mask, 'CUPOS_OFERTADOS'].iloc[0]
+                    nuevos_cupos = max(0, cupos_actuales - cantidad_asignada)
+                    oferta_actualizada.loc[mask, 'CUPOS_OFERTADOS'] = nuevos_cupos
+        
+        return oferta_actualizada
     
     #CIERRE DE PERIODO 
     

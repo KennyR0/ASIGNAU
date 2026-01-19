@@ -1,12 +1,12 @@
 import pandas as pd
 import os
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict
 
 
 class Reporte:
     """
-    Genera reportes del proceso de asignación en formato Excel.
+    Genera reportes del proceso en formato Excel.
     
     Responsabilidades:
     - Generar reportes completos con estadísticas
@@ -14,14 +14,9 @@ class Reporte:
     - Reportes por grupo de asignación
     - Listas de asignados
     
-    Principio SRP: Solo se encarga de generar y guardar reportes.
     """
     
     def __init__(self, carpeta_reportes: str = "Reportes"):
-        """
-        Args:
-            carpeta_reportes: Carpeta donde se guardarán los reportes
-        """
         self.carpeta_reportes = carpeta_reportes
         if not os.path.exists(carpeta_reportes):
             os.makedirs(carpeta_reportes)

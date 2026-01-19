@@ -3,9 +3,7 @@ from typing import Dict, List, Set
 from abc import ABC, abstractmethod
 from enum import Enum
 
-
-
-# ENUMERACIÓN DE GRUPOS (Necesaria para las estrategias)
+# ENUMERACIÓN DE GRUPOS
 
 class GrupoAsignacion(Enum):
     """
@@ -27,10 +25,7 @@ class EstrategiaClasificacion(ABC):
     """
     Strategy Interface: Define cómo clasificar postulantes en grupos.
     
-    Permite implementar diferentes criterios de clasificación:
-    - SENESCYT (oficial)
-    - Solo mérito
-    - Personalizada
+    Permite implementar diferentes criterios de clasificación
     """
     
     @abstractmethod
@@ -54,19 +49,12 @@ class EstrategiaDesempate(ABC):
     
     Permite implementar diferentes criterios de ordenamiento:
     - SENESCYT (puntaje, vulnerabilidad, fecha)
-    - Personalizada
     """
     
     @abstractmethod
     def resolver(self, postulantes: pd.DataFrame) -> pd.DataFrame:
         """
         Ordena los postulantes resolviendo empates.
-        
-        Args:
-            postulantes: DataFrame con postulantes a ordenar
-            
-        Returns:
-            DataFrame ordenado según criterios de desempate
         """
         pass
 
@@ -85,10 +73,7 @@ class EstrategiaSegmentacion(ABC):
         """
         pass
 
-
-# 
-# IMPLEMENTACIONES DE CLASIFICACIÓN
-# 
+# IMPLEMENTACIONES DE CLASIFICACIÓN 
 
 class ClasificacionSENESCYT(EstrategiaClasificacion):
     """

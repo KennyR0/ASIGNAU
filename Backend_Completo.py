@@ -10,10 +10,10 @@ from Reportes import Reporte
 from PeriodoAsignacion import (PeriodoAsignacion, GestorPeriodos)
 
 
-# INTERFACE PARA GESTIÓN DE PERIODOS (DIP)
+# INTERFACE PARA GESTIÓN DE PERIODOS 
 @runtime_checkable
 class IGestorPeriodos(Protocol):
-    """Interface para gestión de periodos (ISP + DIP)"""
+    """Interface para gestión de periodos """
     def obtener_periodo_activo(self) -> Optional['PeriodoAsignacion']:
         ...
     def crear_periodo(self, codigo: str, nombre: str) -> Tuple[bool, str, Optional['PeriodoAsignacion']]:
@@ -55,7 +55,7 @@ class BD_ADMIN(Base_Dato):
         return None
 
 class BD_USUARIO(Base_Dato):
-    """Adapter para base de datos de usuarios/postulantes (Dependency Inversion)"""
+    """Adapter para base de datos de usuarios/postulantes """
     
     def __init__(self, gestor_periodos: IGestorPeriodos = None):
         # DIP: Dependencia inyectada, no creada internamente
@@ -112,11 +112,11 @@ class BD_USUARIO(Base_Dato):
 
 # CONTEXTO DE AUTENTICACIÓN (Single Responsibility Principle)
 class IniciarSesion:
-    """Clase con responsabilidad única: validar credenciales (SRP)"""
+    """Clase con responsabilidad única: validar credenciales """
     
     @classmethod
     def Iniciar(cls, intento_identificacion: str, intento_contra: str, bd: Base_Dato):
-        """Valida las credenciales contra la base de datos proporcionada (DIP)"""
+        """Valida las credenciales contra la base de datos proporcionada """
         datos_usuario = bd.obtener_usuario(intento_identificacion, intento_contra)
         if datos_usuario is not None:
             return True, datos_usuario
@@ -224,7 +224,7 @@ class Administrador(Usuario):
                             porcentajes: Dict[str, float] = None, 
                             es_instituto: bool = False):
         """
-        Ejecuta la asignación de cupos con las estrategias inyectadas (DIP).
+        Ejecuta la asignación de cupos con las estrategias inyectadas .
         Utiliza Strategy Pattern para permitir diferentes comportamientos.
         """
         motor = MotorAsignacion(
@@ -263,7 +263,7 @@ class Administrador(Usuario):
 class Postulante(Usuario):
     """
     Representa un postulante en el sistema.
-    Aplica encapsulamiento con @property para datos sensibles.
+    Aplica encapsulamiento para datos sensibles.
     """
     identificacion: str = ""
     fecha_postulacion: str = ""
